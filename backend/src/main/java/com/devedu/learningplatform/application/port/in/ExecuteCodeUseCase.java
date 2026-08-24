@@ -1,0 +1,10 @@
+package com.devedu.learningplatform.application.port.in;
+
+import com.devedu.learningplatform.application.port.in.command.ExecuteCodeCommand;
+import com.devedu.learningplatform.application.port.in.result.CodeExecutionResult;
+
+public interface ExecuteCodeUseCase {
+
+    CodeExecutionResult execute(ExecuteCodeCommand command);
+}
+

@@ -1,0 +1,390 @@
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+
+export type EditorLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL'
+
+interface SmartCodeEditorProps {
+  editorId?: string
+  language: EditorLanguage
+  value: string
+  onChange: (value: string) => void
+}
+
+interface Completion {
+  label: string
+  detail: string
+  insertText: string
+  cursorOffset?: number
+  triggers?: string[]
+}
+
+interface HistoryEntry {
+  value: string
+  start: number
+  end: number
+}
+
+const indent = '    '
+const maxHistoryEntries = 200
+
+const completions: Record<EditorLanguage, Completion[]> = {
+  CPP: [
+    { label: 'cout', detail: 'Standard output', insertText: 'cout <<  << endl;', cursorOffset: -9 },
+    { label: 'cin', detail: 'Standard input', insertText: 'cin >> ;', cursorOffset: -1 },
+    { label: '#include', detail: 'Include header', insertText: '#include <>', cursorOffset: -1, triggers: ['include'] },
+    { label: 'int main', detail: 'Program entry point', insertText: 'int main() {\n    \n    return 0;\n}', cursorOffset: -18, triggers: ['main'] },
+    { label: 'for', detail: 'For loop', insertText: 'for (int i = 0; i < n; i++) {\n    \n}', cursorOffset: -3 },
+    { label: 'while', detail: 'While loop', insertText: 'while () {\n    \n}', cursorOffset: -10 },
+  ],
+  JAVA: [
+    { label: 'System.out.println', detail: 'Print line', insertText: 'System.out.println();', cursorOffset: -2, triggers: ['sout', 'system'] },
+    { label: 'public static void main', detail: 'Program entry point', insertText: 'public static void main(String[] args) {\n    \n}', cursorOffset: -3, triggers: ['main', 'public'] },
+    { label: 'Scanner', detail: 'Read standard input', insertText: 'Scanner scanner = new Scanner(System.in);' },
+    { label: 'for', detail: 'For loop', insertText: 'for (int i = 0; i < n; i++) {\n    \n}', cursorOffset: -3 },
+    { label: 'if', detail: 'If statement', insertText: 'if () {\n    \n}', cursorOffset: -10 },
+    { label: 'while', detail: 'While loop', insertText: 'while () {\n    \n}', cursorOffset: -10 },
+  ],
+  PYTHON: [
+    { label: 'print', detail: 'Print a value', insertText: 'print()', cursorOffset: -1 },
+    { label: 'input', detail: 'Read standard input', insertText: 'input()', cursorOffset: -1 },
+    { label: 'range', detail: 'Create a number range', insertText: 'range()', cursorOffset: -1 },
+    { label: 'len', detail: 'Get collection length', insertText: 'len()', cursorOffset: -1 },
+    { label: 'def', detail: 'Define a function', insertText: 'def function_name():\n    pass', cursorOffset: -17 },
+    { label: 'for', detail: 'For loop', insertText: 'for item in items:\n    ' },
+    { label: 'if', detail: 'If statement', insertText: 'if condition:\n    ' },
+    { label: 'while', detail: 'While loop', insertText: 'while condition:\n    ' },
+    { label: 'import', detail: 'Import a module', insertText: 'import ' },
+  ],
+  HTML: [
+    { label: 'div', detail: 'HTML container', insertText: '<div></div>', cursorOffset: -6 },
+    { label: 'span', detail: 'Inline container', insertText: '<span></span>', cursorOffset: -7 },
+    { label: 'button', detail: 'Button element', insertText: '<button type="button"></button>', cursorOffset: -9 },
+    { label: 'input', detail: 'Input element', insertText: '<input type="text" />', cursorOffset: -3 },
+    { label: 'script', detail: 'Script element', insertText: '<script></script>', cursorOffset: -9 },
+    { label: 'section', detail: 'Section element', insertText: '<section></section>', cursorOffset: -10 },
+  ],
+  MYSQL: [
+    { label: 'SELECT', detail: 'Read rows', insertText: 'SELECT  FROM ;', cursorOffset: -7 },
+    { label: 'INSERT INTO', detail: 'Insert rows', insertText: 'INSERT INTO  () VALUES ();', cursorOffset: -13, triggers: ['insert'] },
+    { label: 'UPDATE', detail: 'Update rows', insertText: 'UPDATE  SET  WHERE ;', cursorOffset: -13 },
+    { label: 'DELETE FROM', detail: 'Delete rows', insertText: 'DELETE FROM  WHERE ;', cursorOffset: -8, triggers: ['delete'] },
+    { label: 'CREATE TABLE', detail: 'Create a table', insertText: 'CREATE TABLE  (\n    \n);', cursorOffset: -8, triggers: ['create'] },
+    { label: 'ORDER BY', detail: 'Sort result', insertText: 'ORDER BY  ASC', cursorOffset: -4, triggers: ['order'] },
+  ],
+}
+
+export function SmartCodeEditor({ editorId = 'code-editor', language, value, onChange }: SmartCodeEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const historyRef = useRef<HistoryEntry[]>([{ value, start: 0, end: 0 }])
+  const historyIndexRef = useRef(0)
+  const [selection, setSelection] = useState({ start: 0, end: 0 })
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [selectedSuggestion, setSelectedSuggestion] = useState(0)
+  const [scroll, setScroll] = useState({ top: 0, left: 0 })
+
+  const token = useMemo(() => tokenAt(value, selection.start), [value, selection.start])
+  const availableCompletions = useMemo(
+    () => mergeCompletions(declaredIdentifierCompletions(value, selection.start, language), completions[language]),
+    [language, selection.start, value],
+  )
+  const suggestions = useMemo(() => {
+    if (!suggestionsOpen || selection.start !== selection.end || token.query.length === 0) return []
+    const query = token.query.toLowerCase()
+    return availableCompletions
+      .filter((completion) => {
+        const candidates = [completion.label, ...(completion.triggers ?? [])]
+        return candidates.some((candidate) => candidate.replace(/^#/, '').toLowerCase().startsWith(query))
+          && completion.label.replace(/^#/, '').toLowerCase() !== query
+      })
+      .slice(0, 6)
+  }, [availableCompletions, selection, suggestionsOpen, token.query])
+
+  const lineNumbers = useMemo(
+    () => Array.from({ length: value.split('\n').length }, (_, index) => index + 1),
+    [value],
+  )
+
+  useEffect(() => {
+    setSelectedSuggestion(0)
+  }, [token.query, language])
+
+  function updateSelection() {
+    const editor = textareaRef.current
+    if (!editor) return
+    setSelection({ start: editor.selectionStart, end: editor.selectionEnd })
+  }
+
+  function applyValue(nextValue: string, cursorStart: number, cursorEnd = cursorStart, recordHistory = true) {
+    if (recordHistory) {
+      const currentEntry = historyRef.current[historyIndexRef.current]
+      if (currentEntry?.value !== nextValue) {
+        const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1)
+        nextHistory.push({ value: nextValue, start: cursorStart, end: cursorEnd })
+        if (nextHistory.length > maxHistoryEntries) nextHistory.shift()
+        historyRef.current = nextHistory
+        historyIndexRef.current = nextHistory.length - 1
+      }
+    }
+
+    onChange(nextValue)
+    setSelection({ start: cursorStart, end: cursorEnd })
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+      textareaRef.current?.setSelectionRange(cursorStart, cursorEnd)
+    })
+  }
+
+  function restoreHistory(direction: -1 | 1) {
+    const nextIndex = historyIndexRef.current + direction
+    const entry = historyRef.current[nextIndex]
+    if (!entry) return
+    historyIndexRef.current = nextIndex
+    setSuggestionsOpen(false)
+    applyValue(entry.value, entry.start, entry.end, false)
+  }
+
+  function acceptSuggestion(completion = suggestions[selectedSuggestion]) {
+    if (!completion) return
+    const nextValue = value.slice(0, token.start) + completion.insertText + value.slice(selection.end)
+    const cursor = token.start + completion.insertText.length + (completion.cursorOffset ?? 0)
+    setSuggestionsOpen(false)
+    applyValue(nextValue, cursor)
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const shortcutKey = event.ctrlKey || event.metaKey
+    if (shortcutKey && event.key.toLowerCase() === 'z') {
+      event.preventDefault()
+      restoreHistory(event.shiftKey ? 1 : -1)
+      return
+    }
+    if (shortcutKey && event.key.toLowerCase() === 'y') {
+      event.preventDefault()
+      restoreHistory(1)
+      return
+    }
+    if (shortcutKey && event.code === 'Space') {
+      event.preventDefault()
+      setSuggestionsOpen(true)
+      return
+    }
+
+    if (suggestions.length > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const direction = event.key === 'ArrowDown' ? 1 : -1
+        setSelectedSuggestion((current) => (current + direction + suggestions.length) % suggestions.length)
+        return
+      }
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        acceptSuggestion()
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setSuggestionsOpen(false)
+        return
+      }
+    }
+
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      indentSelection(event.shiftKey)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      insertNewLine()
+      return
+    }
+
+    const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
+    const closingCharacters = Object.values(pairs)
+    if (closingCharacters.includes(event.key) && value[selection.start] === event.key && selection.start === selection.end) {
+      event.preventDefault()
+      applyValue(value, selection.start + 1)
+      return
+    }
+    const closing = pairs[event.key]
+    if (closing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault()
+      const selectedText = value.slice(selection.start, selection.end)
+      const inserted = event.key + selectedText + closing
+      const nextValue = value.slice(0, selection.start) + inserted + value.slice(selection.end)
+      const start = selection.start + 1
+      applyValue(nextValue, start, selectedText ? start + selectedText.length : start)
+      setSuggestionsOpen(false)
+    }
+  }
+
+  function indentSelection(removeIndent: boolean) {
+    const lineStart = value.lastIndexOf('\n', Math.max(0, selection.start - 1)) + 1
+    const lineEndIndex = value.indexOf('\n', selection.end)
+    const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex
+    const block = value.slice(lineStart, lineEnd)
+
+    if (removeIndent) {
+      const lines = block.split('\n')
+      let removedBeforeStart = 0
+      let removedTotal = 0
+      const nextBlock = lines.map((line, index) => {
+        const removed = line.match(/^ {1,4}/)?.[0].length ?? 0
+        if (index === 0) removedBeforeStart = Math.min(removed, selection.start - lineStart)
+        removedTotal += removed
+        return line.slice(removed)
+      }).join('\n')
+      applyValue(
+        value.slice(0, lineStart) + nextBlock + value.slice(lineEnd),
+        Math.max(lineStart, selection.start - removedBeforeStart),
+        Math.max(lineStart, selection.end - removedTotal),
+      )
+      return
+    }
+
+    if (selection.start !== selection.end) {
+      const nextBlock = block.split('\n').map((line) => indent + line).join('\n')
+      const lineCount = block.split('\n').length
+      applyValue(
+        value.slice(0, lineStart) + nextBlock + value.slice(lineEnd),
+        selection.start + indent.length,
+        selection.end + indent.length * lineCount,
+      )
+      return
+    }
+
+    const column = selection.start - lineStart
+    const spaces = indent.length - (column % indent.length)
+    const inserted = ' '.repeat(spaces)
+    applyValue(value.slice(0, selection.start) + inserted + value.slice(selection.end), selection.start + spaces)
+  }
+
+  function insertNewLine() {
+    const lineStart = value.lastIndexOf('\n', Math.max(0, selection.start - 1)) + 1
+    const currentLine = value.slice(lineStart, selection.start)
+    const baseIndent = currentLine.match(/^\s*/)?.[0] ?? ''
+    const previousCharacter = value[selection.start - 1]
+    const nextCharacter = value[selection.end]
+    const matchingPair = (previousCharacter === '{' && nextCharacter === '}')
+      || (previousCharacter === '[' && nextCharacter === ']')
+      || (previousCharacter === '(' && nextCharacter === ')')
+
+    if (matchingPair) {
+      const inserted = `\n${baseIndent}${indent}\n${baseIndent}`
+      const cursor = selection.start + 1 + baseIndent.length + indent.length
+      applyValue(value.slice(0, selection.start) + inserted + value.slice(selection.end), cursor)
+    } else {
+      const increasesIndent = /[{[(]$/.test(currentLine.trimEnd())
+        || (language === 'PYTHON' && currentLine.trimEnd().endsWith(':'))
+      const inserted = `\n${baseIndent}${increasesIndent ? indent : ''}`
+      applyValue(value.slice(0, selection.start) + inserted + value.slice(selection.end), selection.start + inserted.length)
+    }
+    setSuggestionsOpen(false)
+  }
+
+  const suggestionPosition = caretPosition(value, selection.start, scroll.top, scroll.left)
+  const suggestionsId = `${editorId}-suggestions`
+
+  return (
+    <div className="grid flex-1 grid-cols-[3rem_minmax(0,1fr)] bg-[#0b1018]">
+      <div aria-hidden="true" className="select-none border-r border-slate-800/70 py-4 pr-3 text-right font-mono text-sm leading-6 text-slate-600">
+        {lineNumbers.map((line) => <div key={line}>{line}</div>)}
+      </div>
+      <div className="relative min-w-0">
+        <label className="sr-only" htmlFor={editorId}>Code editor</label>
+        <textarea
+          ref={textareaRef}
+          id={editorId}
+          value={value}
+          onChange={(event) => {
+            applyValue(event.target.value, event.target.selectionStart, event.target.selectionEnd)
+            setSuggestionsOpen(true)
+          }}
+          onKeyDown={handleKeyDown}
+          onClick={updateSelection}
+          onBlur={() => setSuggestionsOpen(false)}
+          onKeyUp={(event) => {
+            if (!['ArrowDown', 'ArrowUp'].includes(event.key) || suggestions.length === 0) updateSelection()
+          }}
+          onSelect={updateSelection}
+          onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          aria-autocomplete="list"
+          aria-controls={suggestionsId}
+          className="h-full min-h-[500px] w-full resize-none bg-transparent p-4 font-mono text-sm leading-6 text-slate-200 caret-cyan-400 outline-none selection:bg-cyan-400/20"
+        />
+        {suggestions.length > 0 && suggestionPosition.top >= 0 ? (
+          <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-20 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60">
+            {suggestions.map((completion, index) => (
+              <button key={completion.label} type="button" role="option" aria-selected={index === selectedSuggestion} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptSuggestion(completion)} className={`flex w-full items-center gap-3 px-3 py-2 text-left ${index === selectedSuggestion ? 'bg-cyan-400/10 text-cyan-200' : 'text-slate-300 hover:bg-slate-800'}`}>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">{completion.label}</span>
+                <span className="shrink-0 text-[10px] text-slate-500">{completion.detail}</span>
+              </button>
+            ))}
+            <div className="flex items-center justify-between border-t border-slate-800 px-3 py-1.5 text-[10px] text-slate-500"><span>↑↓ chọn</span><span>Tab chấp nhận · Esc đóng</span></div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function mergeCompletions(primary: Completion[], secondary: Completion[]) {
+  const seen = new Set<string>()
+  return [...primary, ...secondary].filter((completion) => {
+    const key = completion.label.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function declaredIdentifierCompletions(value: string, cursor: number, language: EditorLanguage): Completion[] {
+  const sourceBeforeCursor = value.slice(0, cursor)
+  const identifiers = new Set<string>()
+  const collect = (pattern: RegExp, group = 1) => {
+    for (const match of sourceBeforeCursor.matchAll(pattern)) {
+      const identifier = match[group]
+      if (identifier) identifiers.add(identifier)
+    }
+  }
+
+  if (language === 'PYTHON') {
+    collect(/^\s*([A-Za-z_]\w*)\s*=(?!=)/gm)
+    collect(/\bfor\s+([A-Za-z_]\w*)\s+in\b/g)
+    for (const match of sourceBeforeCursor.matchAll(/\bdef\s+[A-Za-z_]\w*\s*\(([^)]*)\)/g)) {
+      for (const parameter of match[1].split(',')) {
+        const identifier = parameter.trim().match(/^([A-Za-z_]\w*)/)?.[1]
+        if (identifier) identifiers.add(identifier)
+      }
+    }
+  } else if (language === 'CPP' || language === 'JAVA') {
+    collect(/\b(?:const\s+)?(?:unsigned\s+|signed\s+)?(?:int|long|short|double|float|char|bool|boolean|String|string|auto|var|Scanner|List(?:<[^>\n]+>)?|Map(?:<[^>\n]+>)?|Set(?:<[^>\n]+>)?)\s+([A-Za-z_]\w*)/g)
+    collect(/\bfor\s*\(\s*(?:int|long|short|double|float|char|var|auto)\s+([A-Za-z_]\w*)/g)
+  } else if (language === 'MYSQL') {
+    collect(/\bAS\s+([A-Za-z_]\w*)/gi)
+  }
+
+  return [...identifiers].map((identifier) => ({
+    label: identifier,
+    detail: 'Biến đã khai báo',
+    insertText: identifier,
+  }))
+}
+
+function tokenAt(value: string, cursor: number) {
+  const match = value.slice(0, cursor).match(/(?:[#<]?[A-Za-z_][A-Za-z0-9_.]*)$/)
+  const raw = match?.[0] ?? ''
+  return { start: cursor - raw.length, query: raw.replace(/^[#<]/, '') }
+}
+
+function caretPosition(value: string, cursor: number, scrollTop: number, scrollLeft: number) {
+  const lines = value.slice(0, cursor).split('\n')
+  const line = lines.length - 1
+  const column = (lines.at(-1) ?? '').replace(/\t/g, indent).length
+  return {
+    top: 16 + (line + 1) * 24 - scrollTop,
+    left: Math.max(8, 16 + column * 8.4 - scrollLeft),
+  }
+}
