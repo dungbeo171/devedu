@@ -40,6 +40,7 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 ### Authentication
 
 - `User` và `UserRole` là domain model thuần Java.
+- `User.name` là tên hiển thị bắt buộc, tối đa 100 ký tự; tài khoản OAuth lấy tên provider và dữ liệu cũ dùng phần local của email làm giá trị migration.
 - Register/login được truy cập qua application input port; repository, password hasher và token provider là output port.
 - JPA adapter, BCrypt và JWT implementation nằm trong `infrastructure`.
 - REST request/response DTO và exception mapping nằm trong `presentation`.
@@ -47,8 +48,8 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - `TEACHER` và `ADMIN` chỉ được cấp qua workflow quản trị khi task tương lai yêu cầu.
 - JWT dùng HMAC-SHA256, stateless, secret từ `JWT_SECRET`; không commit secret cố định.
 - JWT phải xác minh chữ ký constant-time, `alg`, `typ`, `iat`, `exp` và các claim định danh; response register/login phải có `Cache-Control: no-store`.
-- Đăng nhập Google, GitHub và Microsoft dùng Spring Security OAuth2 Client. Client ID/Secret chỉ lấy từ biến môi trường; provider chưa cấu hình phải được báo disabled qua API, không dùng credential giả.
-- OAuth callback chỉ chấp nhận email đã được provider xác thực theo contract của từng provider. GitHub phải lấy email verified qua API `user:email`; Google yêu cầu claim `email_verified`; Microsoft dùng email/preferred username từ OIDC.
+- Đăng nhập Google và GitHub dùng Spring Security OAuth2 Client. Client ID/Secret chỉ lấy từ biến môi trường; provider chưa cấu hình phải được báo disabled qua API, không dùng credential giả.
+- OAuth callback chỉ chấp nhận email đã được provider xác thực theo contract của từng provider. GitHub phải lấy email verified qua API `user:email`; Google yêu cầu claim `email_verified`.
 - OAuth login tìm tài khoản theo email chuẩn hóa, tái sử dụng tài khoản email hiện có hoặc tạo `STUDENT` mới với password hash ngẫu nhiên không dùng để đăng nhập. Sau OAuth, backend phát JWT DevEdu và xóa session handshake; API tiếp tục xác thực stateless bằng Bearer JWT.
 - OAuth token chuyển về `/auth/callback` qua URL fragment, frontend phải lưu token rồi xóa fragment ngay bằng `history.replaceState`. Không đưa Client Secret hoặc access token của provider xuống frontend.
 - Password dùng BCrypt và tối đa 72 UTF-8 byte ở cả register/login. Login email không tồn tại vẫn thực hiện dummy BCrypt check để giảm timing signal cho account enumeration.
@@ -88,10 +89,12 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - Application input port hỗ trợ list, filter theo topic, lấy detail và submit; persistence chỉ đi qua output port.
 - JPA entities/adapters nằm trong `infrastructure/persistence/problem`; REST DTO/controller nằm trong `presentation`.
 - Danh sách và chi tiết bài tập là public. Submit yêu cầu JWT có role `STUDENT`.
+- Chi tiết bài tập có `sampleInput`/`sampleOutput` công khai cho chạy thử; đây là dữ liệu mẫu riêng, không lấy hoặc làm lộ test case ẩn.
 - Submit lấy test case qua output port và gọi `CodeJudgeUseCase`; kết quả cuối cùng là `ACCEPTED`, `WRONG_ANSWER`, `COMPILE_ERROR`, `RUNTIME_ERROR` hoặc `TIME_LIMIT`.
 - `NOT_JUDGED` chỉ được giữ để tương thích dữ liệu cũ. Không lưu submission mới nếu hạ tầng judge không sẵn sàng.
 - Test case và expected output chỉ tồn tại ở backend; không trả qua API public.
 - Frontend code của module nằm trong `src/features/programming-problems`.
+- Trang `/problems` điều hướng theo cấp `chủ đề -> danh sách bài -> workspace`; không hiển thị toàn bộ bài ngay ở màn hình đầu.
 
 ### Course/Lesson
 
@@ -138,11 +141,11 @@ src/
 
 Không gom toàn bộ component, hook hoặc service của nhiều feature vào các thư mục chung. Chỉ chuyển code sang `shared` sau khi có nhu cầu tái sử dụng thực tế.
 
-Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím và autocomplete tĩnh/biến đã khai báo; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống; input chấm Programming Problems luôn lấy từ test case ẩn của backend.
+Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím và autocomplete tĩnh/biến đã khai báo; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems cho phép chạy thử bằng input công khai có thể sửa; input khi Submit luôn lấy từ test case ẩn của backend.
 
 Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/courses`, `/exams`, `/interview`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route tĩnh hiện tại vẫn được xử lý rõ ràng bằng browser pathname.
 
-Authentication frontend nằm trong `src/features/auth`, gồm `/login`, `/register` và `/auth/callback`. Header chỉ đọc trạng thái đăng nhập tối thiểu để hiển thị login/logout; request và lưu/xóa token thuộc feature auth.
+Authentication frontend nằm trong `src/features/auth`, gồm `/login`, `/register` và `/auth/callback`. Header chỉ đọc trạng thái đăng nhập tối thiểu để hiển thị avatar, tên và menu logout; không hiển thị email trên navbar. Request và lưu/xóa token thuộc feature auth.
 
 ## Quy tắc code
 

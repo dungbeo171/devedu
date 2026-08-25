@@ -18,6 +18,9 @@ class UserJpaEntity {
     @Id
     private UUID id;
 
+    @Column(nullable = false, length = 100)
+    private String name;
+
     @Column(nullable = false, unique = true, length = 254)
     private String email;
 
@@ -34,8 +37,9 @@ class UserJpaEntity {
     protected UserJpaEntity() {
     }
 
-    UserJpaEntity(UUID id, String email, String passwordHash, UserRole role, Instant createdAt) {
+    UserJpaEntity(UUID id, String name, String email, String passwordHash, UserRole role, Instant createdAt) {
         this.id = id;
+        this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
@@ -44,6 +48,10 @@ class UserJpaEntity {
 
     UUID getId() {
         return id;
+    }
+
+    String getName() {
+        return name;
     }
 
     String getEmail() {
@@ -62,4 +70,3 @@ class UserJpaEntity {
         return createdAt;
     }
 }
-

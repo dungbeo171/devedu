@@ -1,10 +1,14 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
     email VARCHAR(254) NOT NULL UNIQUE,
     password_hash VARCHAR(60) NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN')),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(100) NOT NULL DEFAULT '';
+UPDATE users SET name = split_part(email, '@', 1) WHERE name = '';
 
 CREATE TABLE IF NOT EXISTS interview_questions (
     id UUID PRIMARY KEY,
@@ -115,11 +119,16 @@ CREATE TABLE IF NOT EXISTS programming_problems (
     title VARCHAR(180) NOT NULL,
     summary VARCHAR(500) NOT NULL,
     description TEXT NOT NULL,
+    sample_input TEXT NOT NULL DEFAULT '',
+    sample_output TEXT NOT NULL DEFAULT '',
     topic VARCHAR(30) NOT NULL CHECK (
         topic IN ('INTRODUCTION', 'CPP', 'JAVA', 'PYTHON', 'OOP', 'DATA_STRUCTURES', 'ALGORITHMS', 'SQL')
     ),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS sample_input TEXT NOT NULL DEFAULT '';
+ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS sample_output TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS problem_submissions (
     id UUID PRIMARY KEY,
@@ -174,13 +183,15 @@ CREATE INDEX IF NOT EXISTS idx_problem_submissions_student_submitted_at
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_problem_submitted_at
     ON problem_submissions (problem_id, submitted_at DESC);
 
-INSERT INTO programming_problems (id, slug, title, summary, description, topic, created_at) VALUES
+INSERT INTO programming_problems (id, slug, title, summary, description, sample_input, sample_output, topic, created_at) VALUES
     (
         '10000000-0000-0000-0000-000000000001',
         'hello-devedu',
         'Hello DevEdu',
         'Đọc một tên và in ra lời chào đầu tiên của bạn.',
         'Cho một chuỗi name không chứa khoảng trắng. Hãy in ra Hello, name! trên một dòng. Ví dụ input: An. Output tương ứng: Hello, An!',
+        E'An\n',
+        E'Hello, An!\n',
         'INTRODUCTION',
         '2026-01-01T00:00:00Z'
     ),
@@ -190,6 +201,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'C++: Tổng hai số',
         'Luyện nhập xuất cơ bản và phép cộng với C++.',
         'Cho hai số nguyên a và b trên cùng một dòng. Hãy in ra tổng a + b. Giới hạn: trị tuyệt đối của mỗi số không vượt quá 10^9.',
+        E'2 3\n',
+        E'5\n',
         'CPP',
         '2026-01-02T00:00:00Z'
     ),
@@ -199,6 +212,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'Java: Phần tử lớn nhất',
         'Tìm giá trị lớn nhất trong một mảng số nguyên.',
         'Dòng đầu chứa số nguyên n. Dòng tiếp theo chứa n số nguyên. Hãy in ra phần tử lớn nhất trong mảng. Giới hạn: 1 <= n <= 100000.',
+        E'5\n1 9 -2 7 3\n',
+        E'9\n',
         'JAVA',
         '2026-01-03T00:00:00Z'
     ),
@@ -208,6 +223,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'Python: Đếm số từ',
         'Xử lý chuỗi và đếm số từ trong một câu.',
         'Cho một dòng văn bản không rỗng. Các từ được phân tách bởi một hoặc nhiều khoảng trắng. Hãy in ra số từ xuất hiện trong dòng.',
+        E'  hoc   lap trinh  moi ngay \n',
+        E'6\n',
         'PYTHON',
         '2026-01-04T00:00:00Z'
     ),
@@ -217,6 +234,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'OOP: Tài khoản ngân hàng',
         'Thiết kế class và đóng gói trạng thái của một tài khoản.',
         'Cài đặt lớp BankAccount có số dư ban đầu, phương thức deposit và withdraw. Chương trình đọc các thao tác rồi in số dư cuối cùng. Không cho phép rút quá số dư hiện có.',
+        E'100\n3\ndeposit 50\nwithdraw 30\nwithdraw 150\n',
+        E'120\n',
         'OOP',
         '2026-01-05T00:00:00Z'
     ),
@@ -226,6 +245,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'Mô phỏng Stack',
         'Cài đặt các thao tác push, pop và top trên ngăn xếp.',
         'Xử lý q truy vấn trên một stack số nguyên. Với push x, thêm x. Với pop, xóa phần tử trên cùng nếu có. Với top, in phần tử trên cùng hoặc EMPTY nếu stack rỗng.',
+        E'7\npush 4\npush 8\ntop\npop\ntop\npop\ntop\n',
+        E'8\n4\nEMPTY\n',
         'DATA_STRUCTURES',
         '2026-01-06T00:00:00Z'
     ),
@@ -235,6 +256,8 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'Tìm kiếm nhị phân',
         'Tìm vị trí của một giá trị trong mảng đã sắp xếp.',
         'Cho mảng tăng dần gồm n số nguyên và giá trị x. In chỉ số đầu tiên của x theo hệ zero-based, hoặc -1 nếu x không xuất hiện. Yêu cầu độ phức tạp O(log n).',
+        E'6\n1 3 3 7 9 11\n3\n',
+        E'1\n',
         'ALGORITHMS',
         '2026-01-07T00:00:00Z'
     ),
@@ -244,14 +267,114 @@ INSERT INTO programming_problems (id, slug, title, summary, description, topic, 
         'SQL: Sinh viên có điểm cao',
         'Viết truy vấn lọc và sắp xếp kết quả học tập.',
         'Bảng students gồm id, name và score. Viết truy vấn trả về name và score của các sinh viên có score từ 8 trở lên, sắp xếp score giảm dần rồi name tăng dần.',
+        E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100), score INT);\nINSERT INTO students VALUES (1, ''An'', 9), (2, ''Binh'', 8), (3, ''Chi'', 7);\n',
+        E'An\t9\nBinh\t8\n',
         'SQL',
         '2026-01-08T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000009', 'kiem-tra-chan-le', 'Kiểm tra chẵn lẻ',
+        'Luyện câu lệnh điều kiện với một số nguyên.',
+        'Cho số nguyên n. In EVEN nếu n chẵn, ngược lại in ODD.',
+        E'7\n', E'ODD\n', 'INTRODUCTION', '2026-01-09T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000010', 'dien-tich-hinh-chu-nhat', 'Diện tích hình chữ nhật',
+        'Đọc hai số nguyên và tính diện tích.',
+        'Cho chiều rộng w và chiều cao h là hai số nguyên dương. In ra diện tích w * h.',
+        E'4 6\n', E'24\n', 'INTRODUCTION', '2026-01-10T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000011', 'cpp-reverse-array', 'C++: Đảo ngược mảng',
+        'Luyện vector và duyệt mảng theo chiều ngược lại.',
+        'Dòng đầu chứa n. Dòng tiếp theo chứa n số nguyên. In các phần tử theo thứ tự đảo ngược, cách nhau bởi một khoảng trắng.',
+        E'5\n1 2 3 4 5\n', E'5 4 3 2 1\n', 'CPP', '2026-01-11T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000012', 'cpp-count-positive', 'C++: Đếm số dương',
+        'Đếm các phần tử lớn hơn 0 trong mảng.',
+        'Dòng đầu chứa n. Dòng tiếp theo chứa n số nguyên. In số lượng phần tử dương.',
+        E'6\n-2 0 3 5 -1 4\n', E'3\n', 'CPP', '2026-01-12T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000013', 'java-array-sum', 'Java: Tổng phần tử mảng',
+        'Luyện Scanner, mảng và kiểu long trong Java.',
+        'Dòng đầu chứa n. Dòng tiếp theo chứa n số nguyên. In tổng tất cả phần tử.',
+        E'5\n2 -1 4 3 2\n', E'10\n', 'JAVA', '2026-01-13T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000014', 'java-palindrome', 'Java: Chuỗi đối xứng',
+        'Kiểm tra một chuỗi có đọc xuôi và ngược giống nhau.',
+        'Cho một chuỗi không chứa khoảng trắng. In YES nếu chuỗi là palindrome, ngược lại in NO.',
+        E'level\n', E'YES\n', 'JAVA', '2026-01-14T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000015', 'python-vowel-count', 'Python: Đếm nguyên âm',
+        'Xử lý chuỗi và đếm ký tự bằng Python.',
+        'Cho một dòng chỉ gồm chữ cái Latin. Đếm các nguyên âm a, e, i, o, u, không phân biệt hoa thường.',
+        E'DevEdu\n', E'3\n', 'PYTHON', '2026-01-15T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000016', 'python-fibonacci', 'Python: Số Fibonacci',
+        'Tính số Fibonacci thứ n bằng vòng lặp.',
+        'Cho n với 0 <= n <= 90. Biết F0 = 0, F1 = 1. In Fn.',
+        E'10\n', E'55\n', 'PYTHON', '2026-01-16T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000017', 'oop-student-average', 'OOP: Điểm trung bình sinh viên',
+        'Mô hình hóa sinh viên và tính điểm trung bình.',
+        'Tạo class Student lưu ba điểm nguyên. Đọc ba điểm, tạo object và in phần nguyên của điểm trung bình.',
+        E'8 9 7\n', E'8\n', 'OOP', '2026-01-17T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000018', 'oop-rectangle', 'OOP: Lớp Rectangle',
+        'Đóng gói chiều rộng, chiều cao và hành vi tính diện tích.',
+        'Tạo class Rectangle nhận width và height. Đọc hai số nguyên, tạo object và in diện tích qua một phương thức của class.',
+        E'4 5\n', E'20\n', 'OOP', '2026-01-18T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000019', 'queue-operations', 'Mô phỏng Queue',
+        'Cài đặt các thao tác push, pop và front trên hàng đợi.',
+        'Xử lý q truy vấn. push x thêm x vào cuối; pop xóa đầu nếu có; front in phần tử đầu hoặc EMPTY nếu rỗng.',
+        E'7\npush 4\npush 8\nfront\npop\nfront\npop\nfront\n', E'4\n8\nEMPTY\n', 'DATA_STRUCTURES', '2026-01-19T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000020', 'balanced-parentheses', 'Dấu ngoặc hợp lệ',
+        'Dùng stack để kiểm tra thứ tự các cặp dấu ngoặc.',
+        'Cho chuỗi chỉ gồm (), [] và {}. In YES nếu mọi dấu ngoặc đóng mở đúng thứ tự, ngược lại in NO.',
+        E'([]{})\n', E'YES\n', 'DATA_STRUCTURES', '2026-01-20T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000021', 'greatest-common-divisor', 'Ước chung lớn nhất',
+        'Áp dụng thuật toán Euclid.',
+        'Cho hai số nguyên dương a và b. In ước chung lớn nhất của chúng.',
+        E'48 18\n', E'6\n', 'ALGORITHMS', '2026-01-21T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000022', 'sort-ascending', 'Sắp xếp tăng dần',
+        'Sắp xếp một dãy số nguyên theo thứ tự tăng dần.',
+        'Dòng đầu chứa n. Dòng tiếp theo chứa n số nguyên. In dãy đã sắp xếp tăng dần, cách nhau bởi một khoảng trắng.',
+        E'5\n5 1 4 2 3\n', E'1 2 3 4 5\n', 'ALGORITHMS', '2026-01-22T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000023', 'sql-count-students', 'SQL: Đếm sinh viên',
+        'Sử dụng hàm tổng hợp COUNT.',
+        'Bảng students gồm id và name. Viết truy vấn trả về số lượng sinh viên trong bảng.',
+        E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100));\nINSERT INTO students VALUES (1, ''An''), (2, ''Binh''), (3, ''Chi'');\n', E'3\n', 'SQL', '2026-01-23T00:00:00Z'
+    ),
+    (
+        '10000000-0000-0000-0000-000000000024', 'sql-highest-score', 'SQL: Điểm cao nhất',
+        'Kết hợp sắp xếp và giới hạn kết quả.',
+        'Bảng students gồm id, name và score. Trả về name và score của sinh viên có điểm cao nhất. Nếu bằng điểm, ưu tiên name tăng dần.',
+        E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100), score INT);\nINSERT INTO students VALUES (1, ''An'', 9), (2, ''Binh'', 8), (3, ''Chi'', 9);\n', E'An\t9\n', 'SQL', '2026-01-24T00:00:00Z'
     )
 ON CONFLICT (id) DO UPDATE SET
     slug = EXCLUDED.slug,
     title = EXCLUDED.title,
     summary = EXCLUDED.summary,
     description = EXCLUDED.description,
+    sample_input = EXCLUDED.sample_input,
+    sample_output = EXCLUDED.sample_output,
     topic = EXCLUDED.topic;
 
 INSERT INTO problem_test_cases (id, problem_id, input, expected_output, time_limit_ms, position) VALUES
@@ -265,7 +388,23 @@ INSERT INTO problem_test_cases (id, problem_id, input, expected_output, time_lim
     ('50000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000006', E'7\npush 4\npush 8\ntop\npop\ntop\npop\ntop\n', E'8\n4\nEMPTY\n', 2000, 1),
     ('50000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-000000000007', E'6\n1 3 3 7 9 11\n3\n', E'1\n', 2000, 1),
     ('50000000-0000-0000-0000-000000000010', '10000000-0000-0000-0000-000000000007', E'4\n2 4 6 8\n5\n', E'-1\n', 2000, 2),
-    ('50000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000008', E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100), score INT);\nINSERT INTO students VALUES (1, ''An'', 9), (2, ''Binh'', 8), (3, ''Chi'', 7);\n', E'An\t9\nBinh\t8\n', 3000, 1)
+    ('50000000-0000-0000-0000-000000000011', '10000000-0000-0000-0000-000000000008', E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100), score INT);\nINSERT INTO students VALUES (1, ''An'', 9), (2, ''Binh'', 8), (3, ''Chi'', 7);\n', E'An\t9\nBinh\t8\n', 3000, 1),
+    ('50000000-0000-0000-0000-000000000012', '10000000-0000-0000-0000-000000000009', E'7\n', E'ODD\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000013', '10000000-0000-0000-0000-000000000010', E'4 6\n', E'24\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000014', '10000000-0000-0000-0000-000000000011', E'5\n1 2 3 4 5\n', E'5 4 3 2 1\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000015', '10000000-0000-0000-0000-000000000012', E'6\n-2 0 3 5 -1 4\n', E'3\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000016', '10000000-0000-0000-0000-000000000013', E'5\n2 -1 4 3 2\n', E'10\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000017', '10000000-0000-0000-0000-000000000014', E'level\n', E'YES\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000018', '10000000-0000-0000-0000-000000000015', E'DevEdu\n', E'3\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000019', '10000000-0000-0000-0000-000000000016', E'10\n', E'55\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000020', '10000000-0000-0000-0000-000000000017', E'8 9 7\n', E'8\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000021', '10000000-0000-0000-0000-000000000018', E'4 5\n', E'20\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000022', '10000000-0000-0000-0000-000000000019', E'7\npush 4\npush 8\nfront\npop\nfront\npop\nfront\n', E'4\n8\nEMPTY\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000023', '10000000-0000-0000-0000-000000000020', E'([]{})\n', E'YES\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000024', '10000000-0000-0000-0000-000000000021', E'48 18\n', E'6\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000025', '10000000-0000-0000-0000-000000000022', E'5\n5 1 4 2 3\n', E'1 2 3 4 5\n', 2000, 1),
+    ('50000000-0000-0000-0000-000000000026', '10000000-0000-0000-0000-000000000023', E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100));\nINSERT INTO students VALUES (1, ''An''), (2, ''Binh''), (3, ''Chi'');\n', E'3\n', 3000, 1),
+    ('50000000-0000-0000-0000-000000000027', '10000000-0000-0000-0000-000000000024', E'CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(100), score INT);\nINSERT INTO students VALUES (1, ''An'', 9), (2, ''Binh'', 8), (3, ''Chi'', 9);\n', E'An\t9\n', 3000, 1)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO interview_questions (id, question, answer, explanation, difficulty, topic, created_at) VALUES

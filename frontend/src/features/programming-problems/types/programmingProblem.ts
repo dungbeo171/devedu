@@ -20,7 +20,15 @@ export interface ProgrammingProblemSummary {
 
 export interface ProgrammingProblemDetail extends ProgrammingProblemSummary {
   description: string
+  sampleInput: string
+  sampleOutput: string
   createdAt: string
+}
+
+export interface ProblemCodeExecution {
+  language: SubmissionLanguage
+  status: 'SUCCESS' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
+  output: string
 }
 
 export interface ProblemSubmission {

@@ -31,6 +31,7 @@ public class UserRepositoryAdapter implements UserRepository {
     public User save(User user) {
         var entity = new UserJpaEntity(
                 user.id(),
+                user.name(),
                 user.email(),
                 user.passwordHash(),
                 user.role(),
@@ -46,6 +47,7 @@ public class UserRepositoryAdapter implements UserRepository {
     private User toDomain(UserJpaEntity entity) {
         return new User(
                 entity.getId(),
+                entity.getName(),
                 entity.getEmail(),
                 entity.getPasswordHash(),
                 entity.getRole(),

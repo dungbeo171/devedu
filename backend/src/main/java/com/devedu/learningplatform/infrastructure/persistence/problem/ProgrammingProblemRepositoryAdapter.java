@@ -37,9 +37,10 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
                 entity.getTitle(),
                 entity.getSummary(),
                 entity.getDescription(),
+                entity.getSampleInput(),
+                entity.getSampleOutput(),
                 entity.getTopic(),
                 entity.getCreatedAt()
         );
     }
 }
-

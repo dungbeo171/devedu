@@ -1,4 +1,4 @@
 package com.devedu.learningplatform.application.port.in.command;
 
-public record ExternalLoginCommand(String email) {
+public record ExternalLoginCommand(String email, String name) {
 }

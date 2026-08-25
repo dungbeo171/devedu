@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 export type EditorLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL'
 
@@ -28,7 +28,7 @@ const maxHistoryEntries = 200
 
 const completions: Record<EditorLanguage, Completion[]> = {
   CPP: [
-    { label: 'cout', detail: 'Standard output', insertText: 'cout <<  << endl;', cursorOffset: -9 },
+    { label: 'cout', detail: 'Standard output', insertText: 'cout << ;', cursorOffset: -1 },
     { label: 'cin', detail: 'Standard input', insertText: 'cin >> ;', cursorOffset: -1 },
     { label: '#include', detail: 'Include header', insertText: '#include <>', cursorOffset: -1, triggers: ['include'] },
     { label: 'int main', detail: 'Program entry point', insertText: 'int main() {\n    \n    return 0;\n}', cursorOffset: -18, triggers: ['main'] },
@@ -197,6 +197,11 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
       insertNewLine()
       return
     }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !shortcutKey && !event.altKey) {
+      event.preventDefault()
+      deleteContent(event.key === 'Backspace')
+      return
+    }
 
     const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
     const closingCharacters = Object.values(pairs)
@@ -281,6 +286,38 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
     setSuggestionsOpen(false)
   }
 
+  function deleteContent(backward: boolean) {
+    if (selection.start !== selection.end) {
+      applyValue(value.slice(0, selection.start) + value.slice(selection.end), selection.start)
+      setSuggestionsOpen(false)
+      return
+    }
+
+    if (backward && selection.start === 0) return
+    if (!backward && selection.start === value.length) return
+
+    const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' }
+    const previousCharacter = value[selection.start - 1]
+    const nextCharacter = value[selection.start]
+    if (backward && pairs[previousCharacter] === nextCharacter) {
+      applyValue(value.slice(0, selection.start - 1) + value.slice(selection.start + 1), selection.start - 1)
+    } else if (backward) {
+      const lineStart = value.lastIndexOf('\n', selection.start - 1) + 1
+      const leadingWhitespace = value.slice(lineStart, selection.start)
+
+      if (/^ +$/.test(leadingWhitespace)) {
+        const spacesToPreviousTabStop = leadingWhitespace.length % indent.length || indent.length
+        const deleteFrom = selection.start - spacesToPreviousTabStop
+        applyValue(value.slice(0, deleteFrom) + value.slice(selection.start), deleteFrom)
+      } else {
+        applyValue(value.slice(0, selection.start - 1) + value.slice(selection.start), selection.start - 1)
+      }
+    } else {
+      applyValue(value.slice(0, selection.start) + value.slice(selection.start + 1), selection.start)
+    }
+    setSuggestionsOpen(false)
+  }
+
   const suggestionPosition = caretPosition(value, selection.start, scroll.top, scroll.left)
   const suggestionsId = `${editorId}-suggestions`
 
@@ -291,6 +328,15 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
       </div>
       <div className="relative min-w-0">
         <label className="sr-only" htmlFor={editorId}>Code editor</label>
+        <div aria-hidden="true" className="code-editor-text pointer-events-none absolute inset-0 z-0 overflow-hidden p-4 text-slate-200">
+          <pre
+            className="m-0 min-w-max whitespace-pre font-inherit"
+            style={{ transform: `translate(${-scroll.left}px, ${-scroll.top}px)` }}
+          >
+            {highlightCode(value, language)}
+            {value.endsWith('\n') ? ' ' : null}
+          </pre>
+        </div>
         <textarea
           ref={textareaRef}
           id={editorId}
@@ -312,10 +358,10 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
           autoCorrect="off"
           aria-autocomplete="list"
           aria-controls={suggestionsId}
-          className="h-full min-h-[500px] w-full resize-none bg-transparent p-4 font-mono text-sm leading-6 text-slate-200 caret-cyan-400 outline-none selection:bg-cyan-400/20"
+          className="code-editor-text relative z-10 h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-cyan-400 outline-none selection:bg-cyan-400/30"
         />
         {suggestions.length > 0 && suggestionPosition.top >= 0 ? (
-          <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-20 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60">
+          <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-30 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60">
             {suggestions.map((completion, index) => (
               <button key={completion.label} type="button" role="option" aria-selected={index === selectedSuggestion} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptSuggestion(completion)} className={`flex w-full items-center gap-3 px-3 py-2 text-left ${index === selectedSuggestion ? 'bg-cyan-400/10 text-cyan-200' : 'text-slate-300 hover:bg-slate-800'}`}>
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">{completion.label}</span>
@@ -328,6 +374,111 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
       </div>
     </div>
   )
+}
+
+function highlightCode(value: string, language: EditorLanguage): ReactNode[] {
+  return tokenizeComments(value, language).map((segment, index) => (
+    <span
+      key={`${segment.kind}-${index}-${segment.value.length}`}
+      className={segment.kind === 'comment' ? 'text-slate-500' : 'text-slate-200'}
+    >
+      {segment.value}
+    </span>
+  ))
+}
+
+interface CodeSegment {
+  kind: 'code' | 'comment'
+  value: string
+}
+
+function tokenizeComments(value: string, language: EditorLanguage): CodeSegment[] {
+  if (!value) return []
+  if (language === 'HTML') return tokenizeHtmlComments(value)
+
+  const segments: CodeSegment[] = []
+  let codeStart = 0
+  let cursor = 0
+
+  const pushComment = (start: number, end: number) => {
+    if (start > codeStart) segments.push({ kind: 'code', value: value.slice(codeStart, start) })
+    segments.push({ kind: 'comment', value: value.slice(start, end) })
+    codeStart = end
+    cursor = end
+  }
+
+  while (cursor < value.length) {
+    const character = value[cursor]
+
+    if (isStringDelimiter(character, language)) {
+      cursor = skipString(value, cursor, language)
+      continue
+    }
+
+    if (value.startsWith('/*', cursor) && language !== 'PYTHON') {
+      const closingIndex = value.indexOf('*/', cursor + 2)
+      pushComment(cursor, closingIndex === -1 ? value.length : closingIndex + 2)
+      continue
+    }
+
+    const lineComment = value.startsWith('//', cursor) && (language === 'CPP' || language === 'JAVA')
+      || value.startsWith('--', cursor) && language === 'MYSQL'
+      || character === '#' && (language === 'PYTHON' || language === 'MYSQL')
+
+    if (lineComment) {
+      const lineEnd = value.indexOf('\n', cursor)
+      pushComment(cursor, lineEnd === -1 ? value.length : lineEnd)
+      continue
+    }
+
+    cursor += 1
+  }
+
+  if (codeStart < value.length) segments.push({ kind: 'code', value: value.slice(codeStart) })
+  return segments
+}
+
+function tokenizeHtmlComments(value: string): CodeSegment[] {
+  const segments: CodeSegment[] = []
+  let cursor = 0
+
+  while (cursor < value.length) {
+    const start = value.indexOf('<!--', cursor)
+    if (start === -1) {
+      segments.push({ kind: 'code', value: value.slice(cursor) })
+      break
+    }
+    if (start > cursor) segments.push({ kind: 'code', value: value.slice(cursor, start) })
+    const closingIndex = value.indexOf('-->', start + 4)
+    const end = closingIndex === -1 ? value.length : closingIndex + 3
+    segments.push({ kind: 'comment', value: value.slice(start, end) })
+    cursor = end
+  }
+
+  return segments
+}
+
+function isStringDelimiter(character: string, language: EditorLanguage) {
+  if (character === '"' || character === "'") return true
+  return character === '`' && language === 'MYSQL'
+}
+
+function skipString(value: string, start: number, language: EditorLanguage) {
+  const delimiter = value[start]
+  const tripleQuoted = language === 'PYTHON' && value.startsWith(delimiter.repeat(3), start)
+  const closing = tripleQuoted ? delimiter.repeat(3) : delimiter
+  let cursor = start + closing.length
+
+  while (cursor < value.length) {
+    if (value[cursor] === '\\') {
+      cursor += 2
+      continue
+    }
+    if (value.startsWith(closing, cursor)) return cursor + closing.length
+    cursor += 1
+  }
+
+  return value.length
 }
 
 function mergeCompletions(primary: Completion[], secondary: Completion[]) {

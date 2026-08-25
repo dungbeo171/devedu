@@ -22,6 +22,7 @@ class JwtTokenProviderTest {
 
     private final User user = new User(
             UUID.fromString("d46bbc0d-4542-4d77-8022-bc5ff6c9fef9"),
+            "Teacher",
             "teacher@example.com",
             "hashed-password",
             UserRole.TEACHER,
@@ -69,4 +70,3 @@ class JwtTokenProviderTest {
         );
     }
 }
-

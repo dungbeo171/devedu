@@ -42,8 +42,8 @@ export function TeacherCourseStudio({ onChanged }: { onChanged: () => void }) {
     } finally { setSaving(false) }
   }
 
-  return <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-7">
-    <div className="flex flex-wrap gap-2">{actions.map((item) => <button key={item.value} type="button" onClick={() => { setAction(item.value); setMessage('') }} className={`rounded-full border px-3 py-2 text-xs font-semibold ${action === item.value ? 'border-cyan-400 bg-cyan-400 text-slate-950' : 'border-slate-700 text-slate-400'}`}>{item.label}</button>)}</div>
+  return <div className="rounded-2xl border border-blue-100 bg-white/60 p-5 sm:p-7">
+    <div className="flex flex-wrap gap-2">{actions.map((item) => <button key={item.value} type="button" onClick={() => { setAction(item.value); setMessage('') }} className={`rounded-full border px-3 py-2 text-xs font-semibold ${action === item.value ? 'border-blue-500 bg-blue-600 text-white' : 'border-blue-200 text-slate-600'}`}>{item.label}</button>)}</div>
     <form onSubmit={(event) => void submit(event)} className="mt-6 grid gap-4 sm:grid-cols-2">
       {action === 'course' ? <><Field label="Slug" value={values.slug} onChange={(v) => update('slug', v)} placeholder="lap-trinh-java" /><Field label="Tên môn học" value={values.title} onChange={(v) => update('title', v)} /></> : null}
       {action === 'topic' ? <Field label="Course ID" value={values.courseId} onChange={(v) => update('courseId', v)} /> : null}
@@ -52,15 +52,15 @@ export function TeacherCourseStudio({ onChanged }: { onChanged: () => void }) {
       {action === 'topic' || action === 'lesson' ? <><Field label="Tiêu đề" value={values.title} onChange={(v) => update('title', v)} /><Field label="Thứ tự" type="number" value={values.position} onChange={(v) => update('position', v)} /></> : null}
       {action === 'course' ? <TextArea label="Mô tả" value={values.description} onChange={(v) => update('description', v)} /> : null}
       {action === 'lesson' ? <TextArea label="Nội dung lesson" value={values.content} onChange={(v) => update('content', v)} /> : null}
-      <div className="sm:col-span-2"><button disabled={saving} className="rounded-lg bg-cyan-400 px-5 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu nội dung'}</button></div>
+      <div className="sm:col-span-2"><button disabled={saving} className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu nội dung'}</button></div>
     </form>
-    {message ? <p className="mt-4 text-sm text-slate-300">{message}</p> : null}
+    {message ? <p className="mt-4 text-sm text-slate-700">{message}</p> : null}
   </div>
 }
 
 function Field({ label, value = '', onChange, placeholder, type = 'text' }: { label: string; value?: string; onChange: (value: string) => void; placeholder?: string; type?: string }) {
-  return <label className="text-xs font-medium text-slate-400">{label}<input required type={type} min={type === 'number' ? 1 : undefined} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400" /></label>
+  return <label className="text-xs font-medium text-slate-600">{label}<input required type={type} min={type === 'number' ? 1 : undefined} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500" /></label>
 }
 function TextArea({ label, value = '', onChange }: { label: string; value?: string; onChange: (value: string) => void }) {
-  return <label className="text-xs font-medium text-slate-400 sm:col-span-2">{label}<textarea required rows={4} value={value} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-400" /></label>
+  return <label className="text-xs font-medium text-slate-600 sm:col-span-2">{label}<textarea required rows={4} value={value} onChange={(e) => onChange(e.target.value)} className="mt-2 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500" /></label>
 }

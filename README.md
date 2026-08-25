@@ -142,17 +142,16 @@ Biến môi trường có thể cấu hình: `DB_URL`, `DB_USERNAME`, `DB_PASSWO
 
 ## Authentication API
 
-Frontend cung cấp `/login` và `/register` cho email/password, đồng thời hỗ trợ Google, GitHub và Microsoft OAuth. Provider chỉ được bật khi cả Client ID và Client Secret tương ứng có trong `.env`; xem trạng thái public tại `GET /api/auth/oauth/providers`.
+Frontend cung cấp `/login` và `/register` bằng tên, email và password, đồng thời hỗ trợ Google và GitHub OAuth. Provider chỉ được bật khi cả Client ID và Client Secret tương ứng có trong `.env`; xem trạng thái public tại `GET /api/auth/oauth/providers`.
 
 Đăng ký OAuth app với các redirect URI local sau:
 
 ```text
 http://localhost:5173/login/oauth2/code/google
 http://localhost:5173/login/oauth2/code/github
-http://localhost:5173/login/oauth2/code/microsoft
 ```
 
-Sau đó điền `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` trong `.env` và chạy lại `docker compose up -d --build backend frontend`. Không đưa client secret vào frontend hoặc commit credential thật.
+Sau đó điền `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` trong `.env` và chạy lại `docker compose up -d --build backend frontend`. Không đưa client secret vào frontend hoặc commit credential thật.
 
 ### Đăng ký
 
@@ -161,12 +160,13 @@ POST /api/auth/register
 Content-Type: application/json
 
 {
+  "name": "Nguyễn Văn An",
   "email": "student@example.com",
   "password": "password123"
 }
 ```
 
-Đăng ký công khai luôn tạo user với role `STUDENT`. Response `201 Created` chứa access token, thời hạn token và thông tin user.
+Đăng ký công khai luôn tạo user với role `STUDENT`. Tên được chuẩn hóa khoảng trắng và giới hạn 100 ký tự. Response `201 Created` chứa access token, thời hạn token và thông tin user.
 
 ### Đăng nhập
 
@@ -244,6 +244,8 @@ API trả `200 OK` với output thật khi chạy thành công:
 Các mã ngôn ngữ hợp lệ: `CPP`, `JAVA`, `PYTHON`, `HTML`, `MYSQL`. Endpoint trả một trong các status `SUCCESS`, `COMPILE_ERROR`, `RUNTIME_ERROR`, `TIME_LIMIT`. Source code chỉ được compile/chạy trong container tạm thời không có network, filesystem gốc read-only, non-root và có giới hạn CPU, RAM, PID, thời gian, output. Runner image phải được pull trước theo hướng dẫn Docker ở trên.
 
 ## Programming Problems
+
+Trang Bài tập hiển thị 8 chủ đề trước, sau đó mới hiển thị danh sách bài của chủ đề được chọn. Dữ liệu khởi tạo có 24 bài (3 bài mỗi chủ đề). Trang chi tiết có đề bài, Sample Input/Sample Output, code editor và nút `Chạy thử` qua Docker sandbox. Input chạy thử có thể chỉnh sửa; nút `Submit` vẫn chấm bằng test case ẩn và yêu cầu tài khoản `STUDENT`.
 
 Home có thêm feature Programming Problems:
 

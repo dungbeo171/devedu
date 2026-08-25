@@ -29,9 +29,6 @@ security:
     github:
       client-id: ${GITHUB_CLIENT_ID:}
       client-secret: ${GITHUB_CLIENT_SECRET:}
-    microsoft:
-      client-id: ${MICROSOFT_CLIENT_ID:}
-      client-secret: ${MICROSOFT_CLIENT_SECRET:}
     redirect-base-uri: ${OAUTH_REDIRECT_BASE_URI:http://localhost:5173/login/oauth2/code}
     frontend-callback-uri: ${OAUTH_FRONTEND_CALLBACK_URI:http://localhost:5173/auth/callback}
 

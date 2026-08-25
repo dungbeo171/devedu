@@ -4,11 +4,12 @@ export async function authenticateWithEmail(
   mode: 'login' | 'register',
   email: string,
   password: string,
+  name?: string,
 ): Promise<AuthenticationResponse> {
   const response = await fetch(`/api/auth/${mode}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(mode === 'register' ? { name, email, password } : { email, password }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => null) as { message?: string } | null

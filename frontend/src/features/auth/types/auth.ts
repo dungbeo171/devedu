@@ -1,8 +1,9 @@
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
-export type OAuthProvider = 'google' | 'github' | 'microsoft'
+export type OAuthProvider = 'google' | 'github'
 
 export interface AuthenticatedUser {
   id: string
+  name: string
   email: string
   role: UserRole
   createdAt: string

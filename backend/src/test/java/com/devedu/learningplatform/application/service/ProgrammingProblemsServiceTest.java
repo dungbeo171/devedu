@@ -52,6 +52,8 @@ class ProgrammingProblemsServiceTest {
         var problem = service.getBySlug("  BINARY-SEARCH ");
 
         assertThat(problem.slug()).isEqualTo("binary-search");
+        assertThat(problem.sampleInput()).isEqualTo("3\n1 2 3\n2\n");
+        assertThat(problem.sampleOutput()).isEqualTo("1\n");
     }
 
     @Test
@@ -89,6 +91,8 @@ class ProgrammingProblemsServiceTest {
                 "Tìm kiếm nhị phân",
                 "Tìm một giá trị.",
                 "Mô tả bài toán.",
+                "3\n1 2 3\n2\n",
+                "1\n",
                 ProblemTopic.ALGORITHMS,
                 NOW
         );

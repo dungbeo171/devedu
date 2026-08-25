@@ -29,13 +29,14 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
                                         Authentication authentication) throws IOException {
         try {
             var oauth = (OAuth2AuthenticationToken) authentication;
-            var email = verifiedEmail(oauth);
-            var result = authenticationUseCase.loginExternal(new ExternalLoginCommand(email));
+            var identity = verifiedIdentity(oauth);
+            var result = authenticationUseCase.loginExternal(new ExternalLoginCommand(identity.email(), identity.name()));
             invalidateSession(request);
             response.setHeader("Cache-Control", "no-store");
             var fragment = "access_token=" + encode(result.accessToken().value())
                     + "&token_type=Bearer"
                     + "&expires_in=" + result.accessToken().expiresInSeconds()
+                    + "&name=" + encode(result.user().name())
                     + "&email=" + encode(result.user().email())
                     + "&role=" + result.user().role().name();
             response.sendRedirect(settings.frontendCallbackUri() + "#" + fragment);
@@ -45,24 +46,23 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
         }
     }
 
-    private String verifiedEmail(OAuth2AuthenticationToken oauth) {
+    private ExternalIdentity verifiedIdentity(OAuth2AuthenticationToken oauth) {
         var provider = oauth.getAuthorizedClientRegistrationId();
         var principal = oauth.getPrincipal();
         if ("google".equals(provider)) {
             if (!(principal instanceof OidcUser oidcUser) || !Boolean.TRUE.equals(oidcUser.getEmailVerified())) {
                 throw new IllegalArgumentException("Google email is not verified");
             }
-            return oidcUser.getEmail();
+            return new ExternalIdentity(oidcUser.getEmail(), preferredName(oidcUser.getFullName(), oidcUser.getEmail()));
         }
         if ("github".equals(provider)) {
             if (!Boolean.TRUE.equals(principal.getAttribute("email_verified_by_provider"))) {
                 throw new IllegalArgumentException("GitHub email is not verified");
             }
-            return principal.getAttribute("email");
-        }
-        if ("microsoft".equals(provider)) {
             var email = principal.<String>getAttribute("email");
-            return email == null || email.isBlank() ? principal.getAttribute("preferred_username") : email;
+            var name = principal.<String>getAttribute("name");
+            if (name == null || name.isBlank()) name = principal.getAttribute("login");
+            return new ExternalIdentity(email, preferredName(name, email));
         }
         throw new IllegalArgumentException("OAuth provider is unsupported");
     }
@@ -74,5 +74,12 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String preferredName(String name, String email) {
+        return name == null || name.isBlank() ? email.substring(0, email.indexOf('@')) : name;
+    }
+
+    private record ExternalIdentity(String email, String name) {
     }
 }

@@ -7,8 +7,6 @@ import org.springframework.security.config.oauth2.client.CommonOAuth2Provider;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 
 import java.util.ArrayList;
 
@@ -34,27 +32,7 @@ public class OAuthClientConfiguration {
                     .redirectUri(settings.redirectUri("github"))
                     .build());
         }
-        if (settings.microsoftEnabled()) {
-            registrations.add(microsoft(settings));
-        }
         return new OptionalClientRegistrationRepository(registrations);
-    }
-
-    private ClientRegistration microsoft(OAuthClientSettings settings) {
-        return ClientRegistration.withRegistrationId("microsoft")
-                .clientId(settings.microsoftClientId())
-                .clientSecret(settings.microsoftClientSecret())
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri(settings.redirectUri("microsoft"))
-                .scope("openid", "profile", "email")
-                .authorizationUri("https://login.microsoftonline.com/common/oauth2/v2.0/authorize")
-                .tokenUri("https://login.microsoftonline.com/common/oauth2/v2.0/token")
-                .jwkSetUri("https://login.microsoftonline.com/common/discovery/v2.0/keys")
-                .userInfoUri("https://graph.microsoft.com/oidc/userinfo")
-                .userNameAttributeName("sub")
-                .clientName("Microsoft")
-                .build();
     }
 
     public static final class OptionalClientRegistrationRepository

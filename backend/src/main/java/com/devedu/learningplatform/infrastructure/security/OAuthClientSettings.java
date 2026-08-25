@@ -12,8 +12,6 @@ public class OAuthClientSettings {
     private final String googleClientSecret;
     private final String githubClientId;
     private final String githubClientSecret;
-    private final String microsoftClientId;
-    private final String microsoftClientSecret;
     private final String redirectBaseUri;
     private final String frontendCallbackUri;
 
@@ -22,8 +20,6 @@ public class OAuthClientSettings {
             @Value("${security.oauth.google.client-secret:}") String googleClientSecret,
             @Value("${security.oauth.github.client-id:}") String githubClientId,
             @Value("${security.oauth.github.client-secret:}") String githubClientSecret,
-            @Value("${security.oauth.microsoft.client-id:}") String microsoftClientId,
-            @Value("${security.oauth.microsoft.client-secret:}") String microsoftClientSecret,
             @Value("${security.oauth.redirect-base-uri}") String redirectBaseUri,
             @Value("${security.oauth.frontend-callback-uri}") String frontendCallbackUri
     ) {
@@ -31,22 +27,18 @@ public class OAuthClientSettings {
         this.googleClientSecret = googleClientSecret.trim();
         this.githubClientId = githubClientId.trim();
         this.githubClientSecret = githubClientSecret.trim();
-        this.microsoftClientId = microsoftClientId.trim();
-        this.microsoftClientSecret = microsoftClientSecret.trim();
         this.redirectBaseUri = redirectBaseUri.replaceAll("/+$", "");
         this.frontendCallbackUri = frontendCallbackUri;
     }
 
     public boolean googleEnabled() { return configured(googleClientId, googleClientSecret); }
     public boolean githubEnabled() { return configured(githubClientId, githubClientSecret); }
-    public boolean microsoftEnabled() { return configured(microsoftClientId, microsoftClientSecret); }
-    public boolean anyEnabled() { return googleEnabled() || githubEnabled() || microsoftEnabled(); }
+    public boolean anyEnabled() { return googleEnabled() || githubEnabled(); }
 
     public List<String> enabledProviders() {
         var providers = new ArrayList<String>();
         if (googleEnabled()) providers.add("google");
         if (githubEnabled()) providers.add("github");
-        if (microsoftEnabled()) providers.add("microsoft");
         return List.copyOf(providers);
     }
 
@@ -54,8 +46,6 @@ public class OAuthClientSettings {
     public String googleClientSecret() { return googleClientSecret; }
     public String githubClientId() { return githubClientId; }
     public String githubClientSecret() { return githubClientSecret; }
-    public String microsoftClientId() { return microsoftClientId; }
-    public String microsoftClientSecret() { return microsoftClientSecret; }
     public String redirectUri(String registrationId) { return redirectBaseUri + "/" + registrationId; }
     public String frontendCallbackUri() { return frontendCallbackUri; }
 

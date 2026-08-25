@@ -30,6 +30,12 @@ class ProgrammingProblemJpaEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "sample_input", nullable = false, columnDefinition = "TEXT")
+    private String sampleInput;
+
+    @Column(name = "sample_output", nullable = false, columnDefinition = "TEXT")
+    private String sampleOutput;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ProblemTopic topic;
@@ -60,6 +66,14 @@ class ProgrammingProblemJpaEntity {
         return description;
     }
 
+    String getSampleInput() {
+        return sampleInput;
+    }
+
+    String getSampleOutput() {
+        return sampleOutput;
+    }
+
     ProblemTopic getTopic() {
         return topic;
     }
@@ -68,4 +82,3 @@ class ProgrammingProblemJpaEntity {
         return createdAt;
     }
 }
-

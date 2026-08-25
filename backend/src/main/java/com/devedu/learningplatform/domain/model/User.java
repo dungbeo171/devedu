@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 public record User(
         UUID id,
+        String name,
         String email,
         String passwordHash,
         UserRole role,
@@ -18,6 +19,7 @@ public record User(
 
     public User {
         Objects.requireNonNull(id, "User id is required");
+        name = normalizeName(name);
         email = normalizeEmail(email);
         if (passwordHash == null || passwordHash.isBlank()) {
             throw new IllegalArgumentException("Password hash is required");
@@ -37,5 +39,13 @@ public record User(
         }
         return normalizedEmail;
     }
-}
 
+    public static String normalizeName(String name) {
+        if (name == null) throw new IllegalArgumentException("Name is required");
+        var normalizedName = name.trim().replaceAll("\\s+", " ");
+        if (normalizedName.isBlank() || normalizedName.length() > 100) {
+            throw new IllegalArgumentException("Name must contain between 1 and 100 characters");
+        }
+        return normalizedName;
+    }
+}

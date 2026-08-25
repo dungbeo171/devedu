@@ -9,6 +9,7 @@ export function OAuthCallbackPage() {
     const query = new URLSearchParams(window.location.search)
     const fragment = new URLSearchParams(window.location.hash.slice(1))
     const token = fragment.get('access_token')
+    const name = fragment.get('name')
     const email = fragment.get('email')
     const role = fragment.get('role') as UserRole | null
     const expiresIn = Number(fragment.get('expires_in'))
@@ -23,10 +24,10 @@ export function OAuthCallbackPage() {
       accessToken: token,
       tokenType: 'Bearer',
       expiresIn,
-      user: { id: '', email, role, createdAt: '' },
+      user: { id: '', name: name?.trim() || email.split('@')[0], email, role, createdAt: '' },
     } satisfies AuthenticationResponse)
     window.location.replace('/')
   }, [])
 
-  return <section className="grid min-h-[60vh] place-items-center text-center text-sm text-slate-300">{message}</section>
+  return <section className="grid min-h-[60vh] place-items-center text-center text-sm text-slate-700">{message}</section>
 }

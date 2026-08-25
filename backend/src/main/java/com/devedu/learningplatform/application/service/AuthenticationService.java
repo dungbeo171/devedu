@@ -45,6 +45,7 @@ public final class AuthenticationService implements AuthenticationUseCase {
     public AuthenticationResult register(RegisterUserCommand command) {
         Objects.requireNonNull(command, "Register command is required");
         var email = User.normalizeEmail(command.email());
+        var name = User.normalizeName(command.name());
         validatePassword(command.password());
 
         if (userRepository.existsByEmail(email)) {
@@ -53,6 +54,7 @@ public final class AuthenticationService implements AuthenticationUseCase {
 
         var user = new User(
                 UUID.randomUUID(),
+                name,
                 email,
                 passwordHasher.hash(command.password()),
                 UserRole.STUDENT,
@@ -87,8 +89,12 @@ public final class AuthenticationService implements AuthenticationUseCase {
     public AuthenticationResult loginExternal(ExternalLoginCommand command) {
         Objects.requireNonNull(command, "External login command is required");
         var email = User.normalizeEmail(command.email());
+        var externalName = command.name() == null || command.name().isBlank()
+                ? email.substring(0, email.indexOf('@'))
+                : command.name();
         var user = userRepository.findByEmail(email).orElseGet(() -> userRepository.save(new User(
                 UUID.randomUUID(),
+                externalName,
                 email,
                 passwordHasher.hash(UUID.randomUUID().toString()),
                 UserRole.STUDENT,

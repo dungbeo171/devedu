@@ -1,10 +1,28 @@
 import type {
   ProblemSubmission,
+  ProblemCodeExecution,
   ProblemTopic,
   ProgrammingProblemDetail,
   ProgrammingProblemSummary,
   SubmissionLanguage,
 } from '../types/programmingProblem'
+
+export async function runProgrammingProblemCode(
+  language: SubmissionLanguage,
+  code: string,
+  input: string,
+): Promise<ProblemCodeExecution> {
+  const response = await fetch('/api/code/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language, code, input }),
+  })
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể chạy thử code lúc này.')
+  }
+  return response.json() as Promise<ProblemCodeExecution>
+}
 
 export async function getProgrammingProblems(
   topic?: ProblemTopic,

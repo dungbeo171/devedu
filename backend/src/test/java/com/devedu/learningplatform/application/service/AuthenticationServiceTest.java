@@ -39,8 +39,9 @@ class AuthenticationServiceTest {
 
     @Test
     void registersAStudentWithNormalizedEmailAndHashedPassword() {
-        var result = service.register(new RegisterUserCommand(" Student@Example.com ", "password123"));
+        var result = service.register(new RegisterUserCommand(" Nguyen   Van A ", " Student@Example.com ", "password123"));
 
+        assertThat(result.user().name()).isEqualTo("Nguyen Van A");
         assertThat(result.user().email()).isEqualTo("student@example.com");
         assertThat(result.user().passwordHash()).isEqualTo("hashed:password123");
         assertThat(result.user().role()).isEqualTo(UserRole.STUDENT);
@@ -50,24 +51,32 @@ class AuthenticationServiceTest {
 
     @Test
     void rejectsAnEmailThatIsAlreadyRegistered() {
-        service.register(new RegisterUserCommand("student@example.com", "password123"));
+        service.register(new RegisterUserCommand("Student", "student@example.com", "password123"));
 
         assertThatThrownBy(() ->
-                service.register(new RegisterUserCommand("STUDENT@example.com", "password456")))
+                service.register(new RegisterUserCommand("Student", "STUDENT@example.com", "password456")))
                 .isInstanceOf(EmailAlreadyExistsException.class);
     }
 
     @Test
     void rejectsAnInvalidPasswordDuringRegistration() {
         assertThatThrownBy(() ->
-                service.register(new RegisterUserCommand("student@example.com", "short")))
+                service.register(new RegisterUserCommand("Student", "student@example.com", "short")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("at least 8");
     }
 
     @Test
+    void rejectsABlankNameDuringRegistration() {
+        assertThatThrownBy(() ->
+                service.register(new RegisterUserCommand("   ", "student@example.com", "password123")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Name");
+    }
+
+    @Test
     void logsInWithValidCredentials() {
-        service.register(new RegisterUserCommand("student@example.com", "password123"));
+        service.register(new RegisterUserCommand("Student", "student@example.com", "password123"));
 
         var result = service.login(new LoginCommand("STUDENT@example.com", "password123"));
 
@@ -77,7 +86,7 @@ class AuthenticationServiceTest {
 
     @Test
     void hidesWhetherTheEmailOrPasswordWasIncorrect() {
-        service.register(new RegisterUserCommand("student@example.com", "password123"));
+        service.register(new RegisterUserCommand("Student", "student@example.com", "password123"));
 
         assertThatThrownBy(() ->
                 service.login(new LoginCommand("student@example.com", "wrong-password")))
@@ -93,7 +102,7 @@ class AuthenticationServiceTest {
 
     @Test
     void rejectsLoginPasswordBeyondBcryptLimit() {
-        service.register(new RegisterUserCommand("student@example.com", "password123"));
+        service.register(new RegisterUserCommand("Student", "student@example.com", "password123"));
 
         assertThatThrownBy(() -> service.login(new LoginCommand(
                 "student@example.com", "x".repeat(73))))
@@ -103,8 +112,9 @@ class AuthenticationServiceTest {
 
     @Test
     void createsAStudentForFirstVerifiedExternalLogin() {
-        var result = service.loginExternal(new ExternalLoginCommand(" OAuth@Example.com "));
+        var result = service.loginExternal(new ExternalLoginCommand(" OAuth@Example.com ", "OAuth Student"));
 
+        assertThat(result.user().name()).isEqualTo("OAuth Student");
         assertThat(result.user().email()).isEqualTo("oauth@example.com");
         assertThat(result.user().role()).isEqualTo(UserRole.STUDENT);
         assertThat(result.user().passwordHash()).startsWith("hashed:");
@@ -113,9 +123,9 @@ class AuthenticationServiceTest {
 
     @Test
     void externalLoginReusesAnExistingEmailAccount() {
-        var registered = service.register(new RegisterUserCommand("student@example.com", "password123"));
+        var registered = service.register(new RegisterUserCommand("Student", "student@example.com", "password123"));
 
-        var external = service.loginExternal(new ExternalLoginCommand("STUDENT@example.com"));
+        var external = service.loginExternal(new ExternalLoginCommand("STUDENT@example.com", "Different Name"));
 
         assertThat(external.user().id()).isEqualTo(registered.user().id());
         assertThat(external.user().passwordHash()).isEqualTo("hashed:password123");

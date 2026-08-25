@@ -11,8 +11,9 @@ public record ProgrammingProblemDetailResponse(
         String title,
         String summary,
         String description,
+        String sampleInput,
+        String sampleOutput,
         ProblemTopic topic,
         Instant createdAt
 ) {
 }
-

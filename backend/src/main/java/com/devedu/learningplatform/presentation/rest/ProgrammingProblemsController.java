@@ -49,6 +49,8 @@ public class ProgrammingProblemsController {
                 problem.title(),
                 problem.summary(),
                 problem.description(),
+                problem.sampleInput(),
+                problem.sampleOutput(),
                 problem.topic(),
                 problem.createdAt()
         );

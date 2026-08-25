@@ -10,6 +10,8 @@ public record ProgrammingProblem(
         String title,
         String summary,
         String description,
+        String sampleInput,
+        String sampleOutput,
         ProblemTopic topic,
         Instant createdAt
 ) {
@@ -20,6 +22,8 @@ public record ProgrammingProblem(
         title = requireText(title, "Problem title is required");
         summary = requireText(summary, "Problem summary is required");
         description = requireText(description, "Problem description is required");
+        sampleInput = sampleInput == null ? "" : sampleInput;
+        sampleOutput = sampleOutput == null ? "" : sampleOutput;
         Objects.requireNonNull(topic, "Problem topic is required");
         Objects.requireNonNull(createdAt, "Problem created time is required");
     }
@@ -31,4 +35,3 @@ public record ProgrammingProblem(
         return value.trim();
     }
 }
-

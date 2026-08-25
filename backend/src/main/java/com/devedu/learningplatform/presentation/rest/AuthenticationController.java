@@ -38,7 +38,7 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticationResponse> register(@RequestBody RegisterRequest request) {
-        var result = authenticationUseCase.register(new RegisterUserCommand(request.email(), request.password()));
+        var result = authenticationUseCase.register(new RegisterUserCommand(request.name(), request.email(), request.password()));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .cacheControl(CacheControl.noStore())
                 .body(toResponse(result));
@@ -57,7 +57,7 @@ public class AuthenticationController {
                 result.accessToken().value(),
                 "Bearer",
                 result.accessToken().expiresInSeconds(),
-                new UserResponse(user.id(), user.email(), user.role(), user.createdAt())
+                new UserResponse(user.id(), user.name(), user.email(), user.role(), user.createdAt())
         );
     }
 }
