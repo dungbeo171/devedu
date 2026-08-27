@@ -138,7 +138,7 @@ Backend chạy tại `http://localhost:8080`. Kiểm tra foundation API:
 GET http://localhost:8080/api/system/status
 ```
 
-Biến môi trường có thể cấu hình: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `SERVER_PORT`, `JWT_SECRET`, `JWT_EXPIRATION`, `CORS_ALLOWED_ORIGINS`, `JUDGE_DOCKER_COMMAND`, `JUDGE_WORKSPACE_ROOT`, `JUDGE_WORKSPACE_VOLUME`, các biến `JUDGE_*_IMAGE` và `JUDGE_*` limit trong `application.yml`.
+Biến môi trường có thể cấu hình: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `SERVER_PORT`, `JWT_SECRET`, `JWT_EXPIRATION`, `CORS_ALLOWED_ORIGINS`, `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `JUDGE_DOCKER_COMMAND`, `JUDGE_WORKSPACE_ROOT`, `JUDGE_WORKSPACE_VOLUME`, các biến `JUDGE_*_IMAGE` và `JUDGE_*` limit trong `application.yml`.
 
 ## Authentication API
 
@@ -166,7 +166,7 @@ Content-Type: application/json
 }
 ```
 
-Đăng ký công khai luôn tạo user với role `STUDENT`. Tên được chuẩn hóa khoảng trắng và giới hạn 100 ký tự. Response `201 Created` chứa access token, thời hạn token và thông tin user.
+Đăng ký công khai và tài khoản OAuth mới luôn tạo user với role `STUDENT`; đăng nhập giữ nguyên role hiện có trong database. Tên được chuẩn hóa khoảng trắng và giới hạn 100 ký tự. Response `201 Created` chứa access token, thời hạn token và thông tin user.
 
 ### Đăng nhập
 
@@ -193,6 +193,33 @@ Quy tắc quyền:
 - Submit bài, tiến độ lesson, Exam sinh viên và Interview: chỉ `STUDENT`.
 - `/api/teacher/**`: `TEACHER` hoặc `ADMIN`.
 - `/api/admin/**`: chỉ `ADMIN`.
+
+### Tài khoản admin và quản lý role
+
+Đặt ba biến sau trong `.env`; backend sẽ tạo tài khoản admin một lần khi khởi động nếu email chưa tồn tại:
+
+```dotenv
+ADMIN_NAME=DevEdu Admin
+ADMIN_EMAIL=admin@devedu.local
+ADMIN_PASSWORD=your-strong-password
+```
+
+Ba biến phải được cấu hình cùng nhau. Password phải dài 8-72 UTF-8 byte. Nếu email đã thuộc một tài khoản không phải admin, backend dừng khởi động thay vì tự ý chiếm quyền tài khoản đó.
+
+Đăng nhập bằng tài khoản admin rồi mở `/admin/users`. API tương ứng:
+
+```http
+GET /api/admin/users
+Authorization: Bearer <admin-token>
+
+PATCH /api/admin/users/{userId}/role
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{ "role": "TEACHER" }
+```
+
+Role hợp lệ gồm `STUDENT`, `TEACHER`, `ADMIN`. Admin không thể tự đổi role của chính mình; người được đổi role cần đăng nhập lại để JWT mới mang quyền vừa được cấp.
 - Endpoint không khớp rule cụ thể: cần JWT hợp lệ.
 
 `JWT_SECRET` cần có ít nhất 32 byte UTF-8 trong môi trường triển khai. Production bắt buộc cấu hình secret ổn định, ngẫu nhiên và không ghi vào source/log. Khi chạy local mà không cấu hình, ứng dụng tạo secret ngẫu nhiên; token local sẽ hết hiệu lực sau mỗi lần restart. Thời hạn mặc định là một giờ và có thể đổi bằng duration ISO-8601 qua `JWT_EXPIRATION`. Response register/login có `Cache-Control: no-store`; JWT xác minh HS256, `typ`, thời điểm phát hành/hết hạn và chữ ký constant-time. Password giới hạn tối đa 72 UTF-8 byte theo BCrypt; login email không tồn tại vẫn chạy một dummy BCrypt check để giảm timing signal cho account enumeration.
@@ -245,7 +272,7 @@ Các mã ngôn ngữ hợp lệ: `CPP`, `JAVA`, `PYTHON`, `HTML`, `MYSQL`. Endpo
 
 ## Programming Problems
 
-Trang Bài tập hiển thị 8 chủ đề trước, sau đó mới hiển thị danh sách bài của chủ đề được chọn. Dữ liệu khởi tạo có 24 bài (3 bài mỗi chủ đề). Trang chi tiết có đề bài, Sample Input/Sample Output, code editor và nút `Chạy thử` qua Docker sandbox. Input chạy thử có thể chỉnh sửa; nút `Submit` vẫn chấm bằng test case ẩn và yêu cầu tài khoản `STUDENT`.
+Trang Bài tập có hàng topic chỉ hiển thị tên, bộ lọc độ khó `Dễ/Trung bình/Khó`, bộ lọc ngôn ngữ và danh sách bài ngay bên dưới. Mỗi bài chiếm một hàng đầy đủ, hiển thị difficulty cùng các ngôn ngữ được phép; bài đã có submission `ACCEPTED` của sinh viên hiện tại được đánh dấu tích xanh ngay sau khi lưu và trạng thái này vẫn còn sau khi tải lại trang. Dữ liệu khởi tạo có 40 bài (5 bài mỗi topic). Trang chi tiết chỉ cho chọn language hợp lệ của bài; backend cũng từ chối language không được phép trước khi chấm. Language, source code và input đang làm được autosave vào PostgreSQL theo từng tài khoản/bài và khôi phục khi mở lại.
 
 Home có thêm feature Programming Problems:
 
@@ -258,8 +285,20 @@ API:
 
 ```http
 GET /api/problems
-GET /api/problems?topic=ALGORITHMS
+GET /api/problems?topic=ALGORITHMS&difficulty=HARD&language=PYTHON
 GET /api/problems/{slug}
+GET /api/student/problem-progress
+Authorization: Bearer <student-access-token>
+
+GET /api/student/problems/{slug}/draft
+Authorization: Bearer <student-access-token>
+
+PUT /api/student/problems/{slug}/draft
+Authorization: Bearer <student-access-token>
+Content-Type: application/json
+
+{ "language": "PYTHON", "sourceCode": "print('draft')", "input": "sample input" }
+
 POST /api/problems/{slug}/submissions
 Authorization: Bearer <student-access-token>
 Content-Type: application/json
@@ -413,4 +452,4 @@ npm audit
 
 ## Phạm vi hiện tại
 
-Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Course/Lesson, Exam, Interview và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI; chưa có workflow cấp quyền `TEACHER`/`ADMIN`.
+Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Course/Lesson, Exam, Interview và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.

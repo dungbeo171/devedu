@@ -9,6 +9,7 @@ import com.devedu.learningplatform.application.port.in.ExamUseCase;
 import com.devedu.learningplatform.application.port.in.InterviewQuestionsUseCase;
 import com.devedu.learningplatform.application.port.in.ListExternalAuthProvidersUseCase;
 import com.devedu.learningplatform.application.port.in.CodeJudgeUseCase;
+import com.devedu.learningplatform.application.port.in.AdminUserManagementUseCase;
 import com.devedu.learningplatform.application.port.out.CourseRepository;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
 import com.devedu.learningplatform.application.port.out.CourseTopicRepository;
@@ -26,6 +27,7 @@ import com.devedu.learningplatform.application.port.out.TokenProvider;
 import com.devedu.learningplatform.application.port.out.UserRepository;
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
+import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
 import com.devedu.learningplatform.application.service.AuthenticationService;
 import com.devedu.learningplatform.application.service.CodeExecutionService;
 import com.devedu.learningplatform.application.service.CourseLearningService;
@@ -34,6 +36,7 @@ import com.devedu.learningplatform.application.service.InterviewQuestionsService
 import com.devedu.learningplatform.application.service.CodeJudgeService;
 import com.devedu.learningplatform.application.service.ProgrammingProblemsService;
 import com.devedu.learningplatform.application.service.SystemStatusService;
+import com.devedu.learningplatform.application.service.AdminUserManagementService;
 import com.devedu.learningplatform.infrastructure.security.OAuthClientSettings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -74,14 +77,24 @@ public class ApplicationConfiguration {
     }
 
     @Bean
+    AdminUserManagementUseCase adminUserManagementUseCase(
+            UserRepository userRepository,
+            PasswordHasher passwordHasher,
+            Clock clock
+    ) {
+        return new AdminUserManagementService(userRepository, passwordHasher, clock);
+    }
+
+    @Bean
     ProgrammingProblemsUseCase programmingProblemsUseCase(
             ProgrammingProblemRepository problemRepository,
             ProblemSubmissionRepository submissionRepository,
+            ProblemDraftRepository draftRepository,
             ProblemTestCaseRepository testCaseRepository,
             CodeJudgeUseCase codeJudgeUseCase,
             Clock clock
     ) {
-        return new ProgrammingProblemsService(problemRepository, submissionRepository, testCaseRepository, codeJudgeUseCase, clock);
+        return new ProgrammingProblemsService(problemRepository, submissionRepository, draftRepository, testCaseRepository, codeJudgeUseCase, clock);
     }
 
     @Bean

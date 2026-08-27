@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { SmartCodeEditor } from '../../../shared/components/SmartCodeEditor'
 import { executeCode } from '../api/executeCode'
 import type { CodeLanguage } from '../types/codeExecution'
+import { IconChevronDown, IconPlay, IconTerminal } from '../../../shared/components/Icons'
 
 interface LanguageOption {
   value: CodeLanguage
@@ -77,7 +78,7 @@ print(f"Hello, {name}!")`,
   },
 ]
 
-const initialOutput = 'Nhấn Run để biên dịch và chạy code trong Docker sandbox.'
+const initialOutput = 'Nhấn Chạy Code để thực thi chương trình.'
 
 export function CodeCompiler() {
   const [language, setLanguage] = useState<CodeLanguage>('CPP')
@@ -102,74 +103,106 @@ export function CodeCompiler() {
     if (!code.trim() || isRunning) return
 
     setIsRunning(true)
-    setOutput('Đang gửi yêu cầu...')
+    setOutput('Đang thực thi chương trình...')
     try {
       const effectiveInput = input.trim() ? input : selectedLanguage.defaultInput
       const result = await executeCode({ language, code, input: effectiveInput })
       setOutput(`[${result.status}]\n${result.output}`)
     } catch (error) {
-      setOutput(error instanceof Error ? error.message : 'Đã có lỗi xảy ra.')
+      setOutput(error instanceof Error ? error.message : 'Đã có lỗi xảy ra khi thực thi.')
     } finally {
       setIsRunning(false)
     }
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white/80 shadow-2xl shadow-blue-200/50">
-      <div className="flex flex-col gap-4 border-b border-blue-100 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white text-slate-900 shadow-xl shadow-blue-900/10">
+      {/* IDE Top Window Bar */}
+      <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="hidden gap-1.5 sm:flex" aria-hidden="true">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+          {/* macOS Style Traffic Lights */}
+          <div className="flex items-center gap-1.5" aria-hidden="true">
+            <span className="h-3 w-3 rounded-full bg-blue-300" />
+            <span className="h-3 w-3 rounded-full bg-blue-500" />
+            <span className="h-3 w-3 rounded-full bg-blue-700" />
           </div>
-          <span className="hidden h-5 w-px bg-blue-100 sm:block" />
-          <span className="truncate font-mono text-xs text-slate-600">
-            workspace / <span className="text-slate-800">{selectedLanguage.extension}</span>
-          </span>
+          <span className="hidden h-4 w-px bg-blue-200 sm:block" />
+          <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-3 py-1 text-xs">
+            <IconTerminal className="h-3.5 w-3.5 text-blue-600" />
+            <span className="truncate font-mono text-slate-500">
+              workspace / <span className="font-semibold text-blue-700">{selectedLanguage.extension}</span>
+            </span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="sr-only" htmlFor="language">Chọn ngôn ngữ</label>
-          <select
-            id="language"
-            value={language}
-            onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}
-            className="min-w-28 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
-          >
-            {languages.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
+        {/* Action Controls */}
+        <div className="flex items-center gap-2.5">
+          <div className="relative">
+            <label className="sr-only" htmlFor="language">Chọn ngôn ngữ</label>
+            <select
+              id="language"
+              value={language}
+              onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}
+              className="appearance-none rounded-xl border border-blue-200 bg-white py-1.5 pl-3.5 pr-8 font-mono text-xs font-bold text-blue-700 outline-none transition hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+            >
+              {languages.map((item) => (
+                <option key={item.value} value={item.value} className="bg-white text-blue-700">
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <IconChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-blue-600" />
+          </div>
+
           <button
             type="button"
             onClick={() => void runCode()}
             disabled={!code.trim() || isRunning}
-            className="inline-flex min-w-24 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M3.5 2.8a1 1 0 0 1 1.52-.85l8 5.2a1 1 0 0 1 0 1.7l-8 5.2A1 1 0 0 1 3.5 13.2V2.8Z" />
-            </svg>
-            {isRunning ? 'Đang chạy' : 'Run'}
+            {isRunning ? (
+              <>
+                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Đang chạy...</span>
+              </>
+            ) : (
+              <>
+                <IconPlay className="h-3.5 w-3.5" />
+                <span>Chạy Code</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      <div className="grid min-h-[560px] lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.75fr)]">
-        <div className="flex min-h-[420px] flex-col border-b border-blue-100 lg:border-r lg:border-b-0">
-          <div className="flex items-center justify-between gap-3 border-b border-blue-100/80 px-4 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Code editor</p>
-            <span className="rounded bg-blue-50 px-2 py-1 font-mono text-[11px] text-slate-500">{selectedLanguage.label}</span>
+      {/* Editor & Terminal Layout */}
+      <div className="grid min-h-[600px] lg:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
+        {/* Left: Code Editor Panel */}
+        <div className="flex min-h-[460px] flex-col border-b border-blue-100 lg:border-r lg:border-b-0">
+          <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white px-4 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-600">Editor</span>
+              <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 ring-1 ring-blue-100">
+                {selectedLanguage.label}
+              </span>
+            </div>
           </div>
           <SmartCodeEditor key={language} language={language} value={code} onChange={setCode} />
         </div>
 
-        <div className="grid min-h-[360px] grid-rows-2 bg-blue-50/50">
-          <div className="flex min-h-0 flex-col border-b border-blue-100">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600" htmlFor="program-input">
-                Input (tùy chọn)
+        {/* Right: Standard Input & Terminal Output */}
+        <div className="grid min-h-[400px] grid-rows-2 bg-blue-950 dark-scroll">
+          {/* Input Panel */}
+          <div className="flex min-h-0 flex-col border-b border-blue-800">
+            <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
+              <label className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100" htmlFor="program-input">
+                Standard Input (stdin)
               </label>
-              <span className="font-mono text-[11px] text-slate-600">
-                {input.trim() ? 'stdin tùy chỉnh' : selectedLanguage.defaultInput ? `mặc định: ${selectedLanguage.defaultInput}` : 'mặc định: trống'}
+              <span className="font-mono text-[10px] text-blue-200">
+                {input.trim() ? 'tùy chỉnh' : selectedLanguage.defaultInput ? `mẫu: ${selectedLanguage.defaultInput}` : 'trống'}
               </span>
             </div>
             <textarea
@@ -177,22 +210,25 @@ export function CodeCompiler() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder={selectedLanguage.defaultInput
-                ? `Để trống để dùng input hệ thống: ${selectedLanguage.defaultInput}`
+                ? `Để trống để dùng input mặc định: ${selectedLanguage.defaultInput}`
                 : 'Không bắt buộc nhập dữ liệu đầu vào'}
               spellCheck={false}
-              className="min-h-0 flex-1 resize-none border-t border-blue-100/70 bg-white p-4 font-mono text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-700 focus:bg-blue-50"
+              className="min-h-0 flex-1 resize-none bg-blue-950 p-4 font-mono text-xs leading-6 text-white outline-none placeholder:text-blue-300 focus:bg-blue-900"
             />
           </div>
 
-          <div className="flex min-h-0 flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Output</p>
-              <span className="flex items-center gap-1.5 text-[11px] text-amber-300/80">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
-                Docker sandbox
-              </span>
+          {/* Terminal Output Panel */}
+          <div className="flex min-h-0 flex-col bg-blue-950">
+            <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50" />
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100">Terminal Output</span>
+              </div>
             </div>
-            <pre aria-live="polite" className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap border-t border-blue-100/70 bg-blue-50 p-4 font-mono text-sm leading-6 text-slate-600">
+            <pre
+              aria-live="polite"
+              className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-white selection:bg-blue-600/30"
+            >
               {output}
             </pre>
           </div>

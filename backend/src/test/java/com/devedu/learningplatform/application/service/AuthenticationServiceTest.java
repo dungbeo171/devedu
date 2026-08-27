@@ -20,6 +20,8 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -143,6 +145,16 @@ class AuthenticationServiceTest {
         @Override
         public Optional<User> findByEmail(String email) {
             return Optional.ofNullable(users.get(email));
+        }
+
+        @Override
+        public Optional<User> findById(UUID id) {
+            return users.values().stream().filter(user -> user.id().equals(id)).findFirst();
+        }
+
+        @Override
+        public List<User> findAll() {
+            return List.copyOf(users.values());
         }
 
         @Override

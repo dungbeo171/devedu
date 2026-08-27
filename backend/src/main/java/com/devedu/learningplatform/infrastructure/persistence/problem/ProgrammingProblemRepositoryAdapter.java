@@ -1,12 +1,16 @@
 package com.devedu.learningplatform.infrastructure.persistence.problem;
 
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
+import com.devedu.learningplatform.domain.model.CodeLanguage;
+import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 @Repository
 public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRepository {
@@ -18,11 +22,9 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
     }
 
     @Override
-    public List<ProgrammingProblem> findAll(ProblemTopic topic) {
-        var entities = topic == null
-                ? repository.findAllByOrderByTitleAsc()
-                : repository.findAllByTopicOrderByTitleAsc(topic);
-        return entities.stream().map(this::toDomain).toList();
+    public List<ProgrammingProblem> findAll(ProblemTopic topic, ProblemDifficulty difficulty, CodeLanguage language) {
+        return repository.findAllFiltered(topic, difficulty, language == null ? "" : language.name())
+                .stream().map(this::toDomain).toList();
     }
 
     @Override
@@ -40,6 +42,12 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
                 entity.getSampleInput(),
                 entity.getSampleOutput(),
                 entity.getTopic(),
+                entity.getDifficulty(),
+                Arrays.stream(entity.getAllowedLanguages().split(","))
+                        .map(String::trim)
+                        .filter(value -> !value.isEmpty())
+                        .map(CodeLanguage::valueOf)
+                        .collect(Collectors.toUnmodifiableSet()),
                 entity.getCreatedAt()
         );
     }

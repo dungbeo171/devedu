@@ -322,13 +322,13 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
   const suggestionsId = `${editorId}-suggestions`
 
   return (
-    <div className="grid flex-1 grid-cols-[3rem_minmax(0,1fr)] bg-[#0b1018]">
-      <div aria-hidden="true" className="select-none border-r border-slate-800/70 py-4 pr-3 text-right font-mono text-sm leading-6 text-slate-600">
+    <div className="grid flex-1 grid-cols-[3.25rem_minmax(0,1fr)] bg-blue-950">
+      <div aria-hidden="true" className="select-none border-r border-blue-800 bg-blue-900 py-4 pr-3 text-right font-mono text-xs leading-6 text-blue-300">
         {lineNumbers.map((line) => <div key={line}>{line}</div>)}
       </div>
       <div className="relative min-w-0">
         <label className="sr-only" htmlFor={editorId}>Code editor</label>
-        <div aria-hidden="true" className="code-editor-text pointer-events-none absolute inset-0 z-0 overflow-hidden p-4 text-slate-200">
+        <div aria-hidden="true" className="code-editor-text pointer-events-none absolute inset-0 z-0 overflow-hidden p-4 text-white">
           <pre
             className="m-0 min-w-max whitespace-pre font-inherit"
             style={{ transform: `translate(${-scroll.left}px, ${-scroll.top}px)` }}
@@ -358,17 +358,17 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
           autoCorrect="off"
           aria-autocomplete="list"
           aria-controls={suggestionsId}
-          className="code-editor-text relative z-10 h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-cyan-400 outline-none selection:bg-cyan-400/30"
+          className="code-editor-text relative z-10 h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-blue-300 outline-none selection:bg-blue-600/30"
         />
         {suggestions.length > 0 && suggestionPosition.top >= 0 ? (
-          <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-30 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl shadow-black/60">
+          <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-30 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-xl border border-blue-200 bg-white shadow-xl shadow-blue-900/20">
             {suggestions.map((completion, index) => (
-              <button key={completion.label} type="button" role="option" aria-selected={index === selectedSuggestion} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptSuggestion(completion)} className={`flex w-full items-center gap-3 px-3 py-2 text-left ${index === selectedSuggestion ? 'bg-cyan-400/10 text-cyan-200' : 'text-slate-300 hover:bg-slate-800'}`}>
-                <span className="min-w-0 flex-1 truncate font-mono text-xs">{completion.label}</span>
-                <span className="shrink-0 text-[10px] text-slate-500">{completion.detail}</span>
+              <button key={completion.label} type="button" role="option" aria-selected={index === selectedSuggestion} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptSuggestion(completion)} className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${index === selectedSuggestion ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'}`}>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">{completion.label}</span>
+                <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-600">{completion.detail}</span>
               </button>
             ))}
-            <div className="flex items-center justify-between border-t border-slate-800 px-3 py-1.5 text-[10px] text-slate-500"><span>↑↓ chọn</span><span>Tab chấp nhận · Esc đóng</span></div>
+            <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50 px-3 py-1.5 text-[10px] text-blue-600"><span>↑↓ di chuyển</span><span>Tab chọn · Esc đóng</span></div>
           </div>
         ) : null}
       </div>
@@ -380,7 +380,7 @@ function highlightCode(value: string, language: EditorLanguage): ReactNode[] {
   return tokenizeComments(value, language).map((segment, index) => (
     <span
       key={`${segment.kind}-${index}-${segment.value.length}`}
-      className={segment.kind === 'comment' ? 'text-slate-500' : 'text-slate-200'}
+      className={segment.kind === 'comment' ? 'text-blue-300 italic' : 'text-white'}
     >
       {segment.value}
     </span>

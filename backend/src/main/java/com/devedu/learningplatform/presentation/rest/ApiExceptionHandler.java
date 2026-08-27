@@ -12,6 +12,8 @@ import com.devedu.learningplatform.application.exception.ExamSlugAlreadyExistsEx
 import com.devedu.learningplatform.application.exception.ExamStateException;
 import com.devedu.learningplatform.application.exception.InterviewQuestionNotFoundException;
 import com.devedu.learningplatform.application.exception.JudgeUnavailableException;
+import com.devedu.learningplatform.application.exception.UserManagementForbiddenException;
+import com.devedu.learningplatform.application.exception.UserNotFoundException;
 import com.devedu.learningplatform.presentation.rest.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -99,6 +101,18 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> handleJudgeUnavailable(JudgeUnavailableException exception,
                                                              HttpServletRequest request) {
         return error(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    ResponseEntity<ApiErrorResponse> handleUserNotFound(UserNotFoundException exception,
+                                                         HttpServletRequest request) {
+        return error(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserManagementForbiddenException.class)
+    ResponseEntity<ApiErrorResponse> handleUserManagementForbidden(UserManagementForbiddenException exception,
+                                                                    HttpServletRequest request) {
+        return error(HttpStatus.FORBIDDEN, exception.getMessage(), request);
     }
 
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class,

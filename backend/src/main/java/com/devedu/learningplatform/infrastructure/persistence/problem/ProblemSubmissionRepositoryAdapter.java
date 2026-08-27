@@ -4,6 +4,10 @@ import com.devedu.learningplatform.application.port.out.ProblemSubmissionReposit
 import com.devedu.learningplatform.domain.model.ProblemSubmission;
 import org.springframework.stereotype.Repository;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.UUID;
+
 @Repository
 public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepository {
 
@@ -29,6 +33,11 @@ public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepo
                 submission.submittedAt()
         );
         return toDomain(repository.saveAndFlush(entity));
+    }
+
+    @Override
+    public Set<UUID> findAcceptedProblemIdsByStudentId(UUID studentId) {
+        return new LinkedHashSet<>(repository.findAcceptedProblemIdsByStudentId(studentId));
     }
 
     private ProblemSubmission toDomain(ProblemSubmissionJpaEntity entity) {

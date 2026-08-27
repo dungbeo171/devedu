@@ -4,6 +4,8 @@ import com.devedu.learningplatform.application.port.in.ProgrammingProblemsUseCas
 import com.devedu.learningplatform.application.port.in.command.SubmitProblemCommand;
 import com.devedu.learningplatform.application.security.AuthenticatedUser;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
+import com.devedu.learningplatform.domain.model.ProblemDifficulty;
+import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
 import com.devedu.learningplatform.presentation.rest.dto.ProblemSubmissionResponse;
 import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemDetailResponse;
@@ -33,9 +35,11 @@ public class ProgrammingProblemsController {
 
     @GetMapping
     public List<ProgrammingProblemSummaryResponse> list(
-            @RequestParam(required = false) ProblemTopic topic
+            @RequestParam(required = false) ProblemTopic topic,
+            @RequestParam(required = false) ProblemDifficulty difficulty,
+            @RequestParam(required = false) CodeLanguage language
     ) {
-        return programmingProblemsUseCase.list(topic).stream()
+        return programmingProblemsUseCase.list(topic, difficulty, language).stream()
                 .map(this::toSummaryResponse)
                 .toList();
     }
@@ -52,6 +56,8 @@ public class ProgrammingProblemsController {
                 problem.sampleInput(),
                 problem.sampleOutput(),
                 problem.topic(),
+                problem.difficulty(),
+                problem.allowedLanguages(),
                 problem.createdAt()
         );
     }
@@ -84,7 +90,9 @@ public class ProgrammingProblemsController {
                 problem.slug(),
                 problem.title(),
                 problem.summary(),
-                problem.topic()
+                problem.topic(),
+                problem.difficulty(),
+                problem.allowedLanguages()
         );
     }
 }

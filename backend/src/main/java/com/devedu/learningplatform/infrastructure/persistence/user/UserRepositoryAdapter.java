@@ -7,6 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
+import java.util.UUID;
 
 @Repository
 public class UserRepositoryAdapter implements UserRepository {
@@ -25,6 +27,16 @@ public class UserRepositoryAdapter implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         return repository.findByEmail(email).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<User> findById(UUID id) {
+        return repository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public List<User> findAll() {
+        return repository.findAllByOrderByCreatedAtDesc().stream().map(this::toDomain).toList();
     }
 
     @Override

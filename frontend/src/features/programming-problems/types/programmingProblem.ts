@@ -9,6 +9,7 @@ export type ProblemTopic =
   | 'SQL'
 
 export type SubmissionLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL'
+export type ProblemDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
 
 export interface ProgrammingProblemSummary {
   id: string
@@ -16,6 +17,8 @@ export interface ProgrammingProblemSummary {
   title: string
   summary: string
   topic: ProblemTopic
+  difficulty: ProblemDifficulty
+  allowedLanguages: SubmissionLanguage[]
 }
 
 export interface ProgrammingProblemDetail extends ProgrammingProblemSummary {
@@ -41,6 +44,14 @@ export interface ProblemSubmission {
   totalTests: number
   executionTimeMillis: number
   submittedAt: string
+}
+
+export interface ProgrammingProblemDraft {
+  problemId: string
+  language: SubmissionLanguage
+  sourceCode: string
+  input: string
+  updatedAt: string
 }
 
 export const topicLabels: Record<ProblemTopic, string> = {

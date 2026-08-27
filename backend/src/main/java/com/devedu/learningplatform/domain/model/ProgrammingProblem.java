@@ -2,6 +2,7 @@ package com.devedu.learningplatform.domain.model;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 public record ProgrammingProblem(
@@ -13,6 +14,8 @@ public record ProgrammingProblem(
         String sampleInput,
         String sampleOutput,
         ProblemTopic topic,
+        ProblemDifficulty difficulty,
+        Set<CodeLanguage> allowedLanguages,
         Instant createdAt
 ) {
 
@@ -25,6 +28,11 @@ public record ProgrammingProblem(
         sampleInput = sampleInput == null ? "" : sampleInput;
         sampleOutput = sampleOutput == null ? "" : sampleOutput;
         Objects.requireNonNull(topic, "Problem topic is required");
+        Objects.requireNonNull(difficulty, "Problem difficulty is required");
+        if (allowedLanguages == null || allowedLanguages.isEmpty()) {
+            throw new IllegalArgumentException("At least one allowed language is required");
+        }
+        allowedLanguages = Set.copyOf(allowedLanguages);
         Objects.requireNonNull(createdAt, "Problem created time is required");
     }
 

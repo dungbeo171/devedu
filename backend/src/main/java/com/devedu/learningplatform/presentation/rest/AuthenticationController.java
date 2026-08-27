@@ -57,7 +57,7 @@ public class AuthenticationController {
                 result.accessToken().value(),
                 "Bearer",
                 result.accessToken().expiresInSeconds(),
-                new UserResponse(user.id(), user.name(), user.email(), user.role(), user.createdAt())
+                UserResponse.from(user)
         );
     }
 }

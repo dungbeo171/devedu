@@ -1,6 +1,7 @@
 package com.devedu.learningplatform.infrastructure.persistence.problem;
 
 import com.devedu.learningplatform.domain.model.ProblemTopic;
+import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -40,6 +41,13 @@ class ProgrammingProblemJpaEntity {
     @Column(nullable = false, length = 30)
     private ProblemTopic topic;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ProblemDifficulty difficulty;
+
+    @Column(name = "allowed_languages", nullable = false, length = 100)
+    private String allowedLanguages;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -77,6 +85,10 @@ class ProgrammingProblemJpaEntity {
     ProblemTopic getTopic() {
         return topic;
     }
+
+    ProblemDifficulty getDifficulty() { return difficulty; }
+
+    String getAllowedLanguages() { return allowedLanguages; }
 
     Instant getCreatedAt() {
         return createdAt;

@@ -24,6 +24,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
@@ -119,6 +120,29 @@ class AuthorizationRulesTest {
     }
 
     @Test
+    void onlyStudentsCanReadTheirSolvedProgrammingProblems() throws Exception {
+        var path = "/api/student/problem-progress";
+        mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
+        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
+        mockMvc.perform(get(path).header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void onlyStudentsCanReadAndSaveProgrammingProblemDrafts() throws Exception {
+        var path = "/api/student/problems/demo/draft";
+        mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
+        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
+        mockMvc.perform(put(path)
+                        .header("Authorization", "Bearer student-token"))
+                .andExpect(status().isOk());
+        mockMvc.perform(put(path)
+                        .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void onlyStudentsCanCompleteLessons() throws Exception {
         var path = "/api/student/lessons/20000000-0000-0000-0000-000000000001/complete";
         mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
@@ -201,6 +225,21 @@ class AuthorizationRulesTest {
 
         @PostMapping("/api/problems/demo/submissions")
         public ResponseEntity<Void> submitProblem() {
+            return ResponseEntity.ok().build();
+        }
+
+        @GetMapping("/api/student/problem-progress")
+        public ResponseEntity<Void> problemProgress() {
+            return ResponseEntity.ok().build();
+        }
+
+        @GetMapping("/api/student/problems/demo/draft")
+        public ResponseEntity<Void> getProblemDraft() {
+            return ResponseEntity.ok().build();
+        }
+
+        @org.springframework.web.bind.annotation.PutMapping("/api/student/problems/demo/draft")
+        public ResponseEntity<Void> saveProblemDraft() {
             return ResponseEntity.ok().build();
         }
 
