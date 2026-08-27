@@ -168,6 +168,15 @@ class AuthorizationRulesTest {
     }
 
     @Test
+    void teachersAndAdminsCanCreateProgrammingProblems() throws Exception {
+        var path = "/api/teacher/problems";
+        mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
+        mockMvc.perform(post(path).header("Authorization", "Bearer student-token")).andExpect(status().isForbidden());
+        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
+    }
+
+    @Test
     void onlyStudentsCanAccessInterviewQuestions() throws Exception {
         mockMvc.perform(get("/api/interview/questions")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/interview/questions").header("Authorization", "Bearer student-token")).andExpect(status().isOk());
@@ -219,6 +228,9 @@ class AuthorizationRulesTest {
 
         @PostMapping("/api/teacher/exams")
         public ResponseEntity<Void> manageExams() { return ResponseEntity.ok().build(); }
+
+        @PostMapping("/api/teacher/problems")
+        public ResponseEntity<Void> createProblem() { return ResponseEntity.ok().build(); }
 
         @GetMapping("/api/interview/questions")
         public ResponseEntity<Void> interviewQuestions() { return ResponseEntity.ok().build(); }

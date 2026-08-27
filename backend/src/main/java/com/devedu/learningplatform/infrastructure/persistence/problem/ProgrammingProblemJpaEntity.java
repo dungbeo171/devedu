@@ -54,6 +54,22 @@ class ProgrammingProblemJpaEntity {
     protected ProgrammingProblemJpaEntity() {
     }
 
+    ProgrammingProblemJpaEntity(UUID id, String slug, String title, String summary, String description,
+                                String sampleInput, String sampleOutput, ProblemTopic topic,
+                                ProblemDifficulty difficulty, String allowedLanguages, Instant createdAt) {
+        this.id = id;
+        this.slug = slug;
+        this.title = title;
+        this.summary = summary;
+        this.description = description;
+        this.sampleInput = sampleInput;
+        this.sampleOutput = sampleOutput;
+        this.topic = topic;
+        this.difficulty = difficulty;
+        this.allowedLanguages = allowedLanguages;
+        this.createdAt = createdAt;
+    }
+
     UUID getId() {
         return id;
     }

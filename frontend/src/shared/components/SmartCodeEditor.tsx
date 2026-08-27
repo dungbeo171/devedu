@@ -26,6 +26,26 @@ interface HistoryEntry {
 const indent = '    '
 const maxHistoryEntries = 200
 
+const languageTypes: Record<EditorLanguage, Set<string>> = {
+  CPP: new Set(['auto', 'bool', 'char', 'double', 'float', 'int', 'long', 'short', 'signed', 'size_t', 'string', 'unsigned', 'void']),
+  JAVA: new Set(['boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short', 'void', 'String', 'Scanner', 'List', 'Map', 'Set']),
+  PYTHON: new Set(['bool', 'bytes', 'dict', 'float', 'int', 'list', 'set', 'str', 'tuple']),
+  HTML: new Set(),
+  MYSQL: new Set(['BIGINT', 'BOOLEAN', 'CHAR', 'DATE', 'DATETIME', 'DECIMAL', 'FLOAT', 'INT', 'INTEGER', 'JSON', 'TEXT', 'TIME', 'TIMESTAMP', 'VARCHAR']),
+}
+
+const languageKeywords: Record<EditorLanguage, Set<string>> = {
+  CPP: new Set(['break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do', 'else', 'enum', 'for', 'if', 'include', 'namespace', 'new', 'private', 'protected', 'public', 'return', 'struct', 'switch', 'template', 'throw', 'try', 'using', 'while']),
+  JAVA: new Set(['abstract', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extends', 'final', 'finally', 'for', 'if', 'implements', 'import', 'interface', 'new', 'package', 'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw', 'throws', 'try', 'while']),
+  PYTHON: new Set(['and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield']),
+  HTML: new Set(),
+  MYSQL: new Set(['ADD', 'ALTER', 'AND', 'AS', 'ASC', 'BETWEEN', 'BY', 'CASE', 'CREATE', 'DELETE', 'DESC', 'DISTINCT', 'DROP', 'ELSE', 'END', 'EXISTS', 'FROM', 'GROUP', 'HAVING', 'IN', 'INDEX', 'INNER', 'INSERT', 'INTO', 'IS', 'JOIN', 'KEY', 'LEFT', 'LIKE', 'LIMIT', 'NOT', 'NULL', 'ON', 'OR', 'ORDER', 'OUTER', 'PRIMARY', 'REFERENCES', 'RIGHT', 'SELECT', 'SET', 'TABLE', 'THEN', 'UNION', 'UNIQUE', 'UPDATE', 'VALUES', 'WHEN', 'WHERE']),
+}
+
+const literalWords = new Set(['false', 'null', 'nullptr', 'none', 'true'])
+const codeTokenPattern = /"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|#[A-Za-z_]\w*|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b|[{}()[\];,.<>+\-*/%=!&|?:]+/g
+const htmlTokenPattern = /<\/?|\/?>|"[^"\n]*"|'[^'\n]*'|&[A-Za-z0-9#]+;|\b\d+(?:\.\d+)?\b|[A-Za-z_:][\w:.-]*|=/g
+
 const completions: Record<EditorLanguage, Completion[]> = {
   CPP: [
     { label: 'cout', detail: 'Standard output', insertText: 'cout << ;', cursorOffset: -1 },
@@ -377,14 +397,73 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
 }
 
 function highlightCode(value: string, language: EditorLanguage): ReactNode[] {
-  return tokenizeComments(value, language).map((segment, index) => (
-    <span
-      key={`${segment.kind}-${index}-${segment.value.length}`}
-      className={segment.kind === 'comment' ? 'text-blue-300 italic' : 'text-white'}
-    >
-      {segment.value}
-    </span>
-  ))
+  const nodes: ReactNode[] = []
+  tokenizeComments(value, language).forEach((segment, segmentIndex) => {
+    if (segment.kind === 'comment') {
+      nodes.push(<span key={`comment-${segmentIndex}`} className="text-blue-300 italic">{segment.value}</span>)
+      return
+    }
+    nodes.push(...highlightCodeSegment(segment.value, language, segmentIndex))
+  })
+  return nodes
+}
+
+function highlightCodeSegment(value: string, language: EditorLanguage, segmentIndex: number): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const pattern = language === 'HTML' ? htmlTokenPattern : codeTokenPattern
+  pattern.lastIndex = 0
+  let cursor = 0
+  let tokenIndex = 0
+
+  for (const match of value.matchAll(pattern)) {
+    const index = match.index
+    if (index > cursor) {
+      nodes.push(<span key={`plain-${segmentIndex}-${tokenIndex++}`} className="text-white">{value.slice(cursor, index)}</span>)
+    }
+    const token = match[0]
+    nodes.push(
+      <span key={`token-${segmentIndex}-${tokenIndex++}`} className={syntaxTokenClass(token, value, index, language)}>
+        {token}
+      </span>,
+    )
+    cursor = index + token.length
+  }
+  if (cursor < value.length) {
+    nodes.push(<span key={`plain-${segmentIndex}-${tokenIndex}`} className="text-white">{value.slice(cursor)}</span>)
+  }
+  return nodes
+}
+
+function syntaxTokenClass(token: string, source: string, index: number, language: EditorLanguage): string {
+  if (token.startsWith('"') || token.startsWith("'") || token.startsWith('`')) return 'text-amber-300'
+  if (/^\d/.test(token)) return 'text-emerald-300'
+  if (token.startsWith('&') && token.endsWith(';')) return 'text-amber-300'
+
+  if (language === 'HTML') {
+    if (token.startsWith('<') || token.endsWith('>') || token === '=') return 'text-slate-300'
+    const before = source.slice(0, index)
+    const insideTag = before.lastIndexOf('<') > before.lastIndexOf('>')
+    if (insideTag && /<\/?\s*$/.test(before)) return 'text-blue-300 font-semibold'
+    if (insideTag && /^\s*=/.test(source.slice(index + token.length))) return 'text-cyan-300'
+    return 'text-white'
+  }
+
+  const comparison = language === 'MYSQL' ? token.toUpperCase() : token
+  const typeMatch = language === 'MYSQL'
+    ? languageTypes[language].has(comparison)
+    : languageTypes[language].has(token)
+  if (typeMatch) return 'text-cyan-300 font-semibold'
+
+  const keywordMatch = language === 'MYSQL'
+    ? languageKeywords[language].has(comparison)
+    : languageKeywords[language].has(token.replace(/^#/, ''))
+  if (keywordMatch || token.startsWith('#')) return 'text-fuchsia-300 font-semibold'
+  if (literalWords.has(token.toLowerCase())) return 'text-orange-300'
+  if (/^[A-Za-z_]\w*$/.test(token) && /^\s*\(/.test(source.slice(index + token.length))) {
+    return 'text-blue-300'
+  }
+  if (/^[{}()[\];,.<>+\-*/%=!&|?:]+$/.test(token)) return 'text-slate-300'
+  return 'text-white'
 }
 
 interface CodeSegment {

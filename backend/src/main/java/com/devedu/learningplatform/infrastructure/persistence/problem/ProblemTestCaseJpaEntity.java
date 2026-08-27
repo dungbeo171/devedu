@@ -16,6 +16,15 @@ class ProblemTestCaseJpaEntity {
     @Column(name="time_limit_ms",nullable=false) private int timeLimitMillis;
     @Column(nullable=false) private int position;
     protected ProblemTestCaseJpaEntity() {}
+    ProblemTestCaseJpaEntity(UUID id, UUID problemId, String input, String expectedOutput,
+                             int timeLimitMillis, int position) {
+        this.id = id;
+        this.problemId = problemId;
+        this.input = input;
+        this.expectedOutput = expectedOutput;
+        this.timeLimitMillis = timeLimitMillis;
+        this.position = position;
+    }
     UUID getId(){return id;} UUID getProblemId(){return problemId;} String getInput(){return input;}
     String getExpectedOutput(){return expectedOutput;} int getTimeLimitMillis(){return timeLimitMillis;} int getPosition(){return position;}
 }

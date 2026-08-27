@@ -222,7 +222,7 @@ Content-Type: application/json
 Role hợp lệ gồm `STUDENT`, `TEACHER`, `ADMIN`. Admin không thể tự đổi role của chính mình; người được đổi role cần đăng nhập lại để JWT mới mang quyền vừa được cấp.
 - Endpoint không khớp rule cụ thể: cần JWT hợp lệ.
 
-`JWT_SECRET` cần có ít nhất 32 byte UTF-8 trong môi trường triển khai. Production bắt buộc cấu hình secret ổn định, ngẫu nhiên và không ghi vào source/log. Khi chạy local mà không cấu hình, ứng dụng tạo secret ngẫu nhiên; token local sẽ hết hiệu lực sau mỗi lần restart. Thời hạn mặc định là một giờ và có thể đổi bằng duration ISO-8601 qua `JWT_EXPIRATION`. Response register/login có `Cache-Control: no-store`; JWT xác minh HS256, `typ`, thời điểm phát hành/hết hạn và chữ ký constant-time. Password giới hạn tối đa 72 UTF-8 byte theo BCrypt; login email không tồn tại vẫn chạy một dummy BCrypt check để giảm timing signal cho account enumeration.
+`JWT_SECRET` cần có ít nhất 32 byte UTF-8 trong môi trường triển khai. Production bắt buộc cấu hình secret ổn định, ngẫu nhiên và không ghi vào source/log. Khi chạy local mà không cấu hình, ứng dụng tạo secret ngẫu nhiên; token local sẽ hết hiệu lực sau mỗi lần restart. Backend standalone mặc định một giờ; Compose local dùng `P7D` trong `.env` để phiên đăng nhập còn hiệu lực qua các lần khởi động máy. Có thể đổi bằng duration ISO-8601 qua `JWT_EXPIRATION`. Frontend kiểm tra claim `exp` trước khi hiển thị user và tự xóa trạng thái đăng nhập đã hết hạn. Response register/login có `Cache-Control: no-store`; JWT xác minh HS256, `typ`, thời điểm phát hành/hết hạn và chữ ký constant-time. Password giới hạn tối đa 72 UTF-8 byte theo BCrypt; login email không tồn tại vẫn chạy một dummy BCrypt check để giảm timing signal cho account enumeration.
 
 Frontend hiện đọc token từ local storage để phục vụ các feature đã có; đây là cơ chế local hiện tại, không phải mô hình session hoàn chỉnh cho production. Không đưa token vào URL hoặc log. Nếu chuyển sang cookie HttpOnly trong tương lai phải thiết kế lại CSRF và contract đăng nhập một cách riêng biệt.
 
@@ -236,7 +236,7 @@ Adapter Exam tải options theo batch khi đọc danh sách câu hỏi để tr�
 
 ## Code Compiler
 
-Editor dùng chung của Compiler và Programming Problems hỗ trợ autocomplete theo ngôn ngữ, gợi ý các biến đã khai báo trước vị trí con trỏ, `Tab`, `Shift+Tab`, auto-indent, auto-pair, `Ctrl+Space`, `Ctrl+Z` và `Ctrl+Y`/`Ctrl+Shift+Z`. Input trên Compiler là tùy chọn; nếu để trống, frontend gửi input mẫu mặc định của ngôn ngữ. Khi submit Programming Problems, input và expected output luôn do test case ẩn của backend cung cấp.
+Editor dùng chung của Compiler và Programming Problems hỗ trợ autocomplete theo ngôn ngữ, gợi ý các biến đã khai báo trước vị trí con trỏ, syntax highlighting riêng cho type/keyword/string/number/function/comment, `Tab`, `Shift+Tab`, auto-indent, auto-pair, `Ctrl+Space`, `Ctrl+Z` và `Ctrl+Y`/`Ctrl+Shift+Z`. Input trên Compiler là tùy chọn; nếu để trống, frontend gửi input mẫu mặc định của ngôn ngữ. Khi submit Programming Problems, input và expected output luôn do test case ẩn của backend cung cấp.
 
 Trang `/` cung cấp giao diện compiler responsive cho C++, Java, Python, HTML và MySQL:
 
@@ -272,7 +272,9 @@ Các mã ngôn ngữ hợp lệ: `CPP`, `JAVA`, `PYTHON`, `HTML`, `MYSQL`. Endpo
 
 ## Programming Problems
 
-Trang Bài tập có hàng topic chỉ hiển thị tên, bộ lọc độ khó `Dễ/Trung bình/Khó`, bộ lọc ngôn ngữ và danh sách bài ngay bên dưới. Mỗi bài chiếm một hàng đầy đủ, hiển thị difficulty cùng các ngôn ngữ được phép; bài đã có submission `ACCEPTED` của sinh viên hiện tại được đánh dấu tích xanh ngay sau khi lưu và trạng thái này vẫn còn sau khi tải lại trang. Dữ liệu khởi tạo có 40 bài (5 bài mỗi topic). Trang chi tiết chỉ cho chọn language hợp lệ của bài; backend cũng từ chối language không được phép trước khi chấm. Language, source code và input đang làm được autosave vào PostgreSQL theo từng tài khoản/bài và khôi phục khi mở lại.
+Trang Bài tập có hàng topic chỉ hiển thị tên, bộ lọc độ khó `Dễ/Trung bình/Khó`, bộ lọc ngôn ngữ, tiến độ và danh sách phân trang cố định 10 bài mỗi trang ngay bên dưới. Mỗi bài chiếm một hàng đầy đủ, hiển thị difficulty cùng các ngôn ngữ được phép; bài đã có submission `ACCEPTED` của sinh viên hiện tại được đánh dấu tích xanh ngay sau khi lưu và trạng thái này vẫn còn sau khi tải lại trang. Dữ liệu khởi tạo có 40 bài (5 bài mỗi topic). Trang chi tiết chỉ cho chọn language hợp lệ của bài; backend cũng từ chối language không được phép trước khi chấm. Language, source code và input đang làm được autosave vào PostgreSQL theo từng tài khoản/bài và khôi phục khi mở lại.
+
+Tài khoản `TEACHER` và `ADMIN` có thể mở form **Thêm bài tập** tại `/problems`, nhập nội dung, ngôn ngữ được phép và một hoặc nhiều test case ẩn. Problem và test case được lưu trong cùng transaction; API public không trả test case hoặc expected output ẩn.
 
 Home có thêm feature Programming Problems:
 
@@ -287,6 +289,9 @@ API:
 GET /api/problems
 GET /api/problems?topic=ALGORITHMS&difficulty=HARD&language=PYTHON
 GET /api/problems/{slug}
+POST /api/teacher/problems
+Authorization: Bearer <teacher-or-admin-access-token>
+
 GET /api/student/problem-progress
 Authorization: Bearer <student-access-token>
 

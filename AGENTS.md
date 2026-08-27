@@ -88,9 +88,10 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 ### Programming Problems
 
 - Domain gồm `ProgrammingProblem`, `ProblemTopic`, `ProblemDifficulty`, `ProblemTestCase`, `ProblemSubmission` và `ProblemDraft`. Mỗi problem khai báo tập `CodeLanguage` được phép.
-- Application input port hỗ trợ list, filter đồng thời theo topic/difficulty/language, lấy detail, submit và đọc danh sách bài đã giải của sinh viên; persistence chỉ đi qua output port.
+- Application input port hỗ trợ list, filter đồng thời theo topic/difficulty/language, lấy detail, tạo bài, submit và đọc danh sách bài đã giải của sinh viên; persistence chỉ đi qua output port.
 - JPA entities/adapters nằm trong `infrastructure/persistence/problem`; REST DTO/controller nằm trong `presentation`.
 - Danh sách và chi tiết bài tập là public. Submit yêu cầu JWT có role `STUDENT`.
+- `POST /api/teacher/problems` cho phép `TEACHER` và `ADMIN` tạo bài cùng ít nhất một test case ẩn. Problem và test case phải được lưu atomically; `STUDENT` không được gọi endpoint này.
 - Chi tiết bài tập có `sampleInput`/`sampleOutput` công khai cho chạy thử; đây là dữ liệu mẫu riêng, không lấy hoặc làm lộ test case ẩn.
 - Submit lấy test case qua output port và gọi `CodeJudgeUseCase`; kết quả cuối cùng là `ACCEPTED`, `WRONG_ANSWER`, `COMPILE_ERROR`, `RUNTIME_ERROR` hoặc `TIME_LIMIT`.
 - Application phải kiểm tra language thuộc tập ngôn ngữ của problem trước khi lưu draft hoặc gọi Code Judge; frontend chỉ hiển thị các language được phép trong workspace.
@@ -99,7 +100,7 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - `NOT_JUDGED` chỉ được giữ để tương thích dữ liệu cũ. Không lưu submission mới nếu hạ tầng judge không sẵn sàng.
 - Test case và expected output chỉ tồn tại ở backend; không trả qua API public.
 - Frontend code của module nằm trong `src/features/programming-problems`.
-- Trang `/problems` hiển thị các topic dạng bộ lọc tên ngắn ở trên, bộ lọc difficulty/language và danh sách bài một hàng ở dưới; chọn bài mới mở workspace.
+- Trang `/problems` hiển thị các topic dạng bộ lọc tên ngắn ở trên, bộ lọc difficulty/language/tiến độ và danh sách bài một hàng ở dưới, phân trang cố định 10 bài mỗi trang; chọn bài mới mở workspace. Tài khoản `TEACHER`/`ADMIN` thấy form thêm bài tập và test case ẩn.
 - Slug bài tập dùng tiếng Việt không dấu, phân tách bằng dấu gạch ngang để URL ngắn và dễ đọc.
 - Danh sách trong từng chủ đề hiển thị mỗi bài trên một hàng đầy đủ; bài đã giải có dấu tích lấy từ tiến độ `ACCEPTED` đã lưu và đồng bộ lại ngay sau Submit. Chạy thử `SUCCESS` hiển thị trạng thái và dấu tích màu xanh nhưng không được tính là đã giải.
 
@@ -148,7 +149,7 @@ src/
 
 Không gom toàn bộ component, hook hoặc service của nhiều feature vào các thư mục chung. Chỉ chuyển code sang `shared` sau khi có nhu cầu tái sử dụng thực tế.
 
-Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím và autocomplete tĩnh/biến đã khai báo; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems cho phép chạy thử bằng input công khai có thể sửa; input khi Submit luôn lấy từ test case ẩn của backend.
+Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím, autocomplete tĩnh/biến đã khai báo và syntax highlighting theo ngôn ngữ cho type, keyword, string, number, function và comment; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems cho phép chạy thử bằng input công khai có thể sửa; input khi Submit luôn lấy từ test case ẩn của backend.
 
 Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/courses`, `/exams`, `/interview`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
 

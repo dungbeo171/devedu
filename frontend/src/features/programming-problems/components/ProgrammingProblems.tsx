@@ -1,6 +1,8 @@
 import { useEffect, useState, type MouseEvent } from 'react'
 import { getProgrammingProblems, getSolvedProgrammingProblemIds } from '../api/programmingProblemsApi'
 import { ProblemWorkspace } from './ProblemWorkspace'
+import { ProblemCreator } from './ProblemCreator'
+import { getStoredUser } from '../../auth/api/authApi'
 import {
   topicLabels,
   type ProblemDifficulty,
@@ -20,6 +22,7 @@ const languageLabels: Record<SubmissionLanguage, string> = {
   CPP: 'C++', JAVA: 'Java', PYTHON: 'Python', HTML: 'HTML', MYSQL: 'MySQL',
 }
 type ProgressFilter = '' | 'SOLVED' | 'UNSOLVED'
+const problemsPerPage = 10
 
 interface ProgrammingProblemsProps {
   slug?: string
@@ -35,6 +38,9 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [flashMessage, setFlashMessage] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [page, setPage] = useState(1)
+  const currentUser = getStoredUser()
 
   useEffect(() => {
     let ignore = false
@@ -51,19 +57,27 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
-  }, [selectedTopic, difficulty, language])
+  }, [selectedTopic, difficulty, language, refreshKey])
 
   useEffect(() => {
+    if (currentUser?.role !== 'STUDENT') {
+      setSolvedProblemIds(new Set())
+      return
+    }
     void getSolvedProgrammingProblemIds()
       .then((problemIds) => setSolvedProblemIds(new Set(problemIds)))
       .catch(() => undefined)
-  }, [])
+  }, [currentUser?.id, currentUser?.role])
 
   useEffect(() => {
     if (!flashMessage) return
     const timeoutId = window.setTimeout(() => setFlashMessage(''), 3300)
     return () => window.clearTimeout(timeoutId)
   }, [flashMessage])
+
+  useEffect(() => {
+    setPage(1)
+  }, [selectedTopic, difficulty, language, progress])
 
   if (slug) return (
     <ProblemWorkspace
@@ -82,6 +96,10 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
     if (progress === 'UNSOLVED') return !solvedProblemIds.has(problem.id)
     return true
   })
+  const totalPages = Math.max(1, Math.ceil(visibleProblems.length / problemsPerPage))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * problemsPerPage
+  const pageProblems = visibleProblems.slice(pageStart, pageStart + problemsPerPage)
 
   return (
     <section className="mx-auto w-full lg:w-4/5 xl:w-3/5">
@@ -113,6 +131,13 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
         </div>
       </div>
 
+      {currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN' ? (
+        <ProblemCreator onCreated={(problem) => {
+          setRefreshKey((current) => current + 1)
+          setFlashMessage(`Đã thêm bài tập “${problem.title}”`)
+        }} />
+      ) : null}
+
       {/* Filter Toolbar Card */}
       <div className="relative z-20 mt-6 rounded-3xl border border-blue-100 bg-white p-4 shadow-md shadow-blue-900/10">
         <div className="flex flex-wrap gap-1.5">
@@ -140,16 +165,18 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
             ]}
             onChange={(value) => setLanguage(value as SubmissionLanguage | '')}
           />
-          <ProblemFilterDropdown
-            label="Tiến độ"
-            value={progress}
-            options={[
-              { value: '', label: 'Tất cả bài tập' },
-              { value: 'SOLVED', label: 'Đã giải' },
-              { value: 'UNSOLVED', label: 'Chưa giải' },
-            ]}
-            onChange={(value) => setProgress(value as ProgressFilter)}
-          />
+          {currentUser?.role === 'STUDENT' ? (
+            <ProblemFilterDropdown
+              label="Tiến độ"
+              value={progress}
+              options={[
+                { value: '', label: 'Tất cả bài tập' },
+                { value: 'SOLVED', label: 'Đã giải' },
+                { value: 'UNSOLVED', label: 'Chưa giải' },
+              ]}
+              onChange={(value) => setProgress(value as ProgressFilter)}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -166,7 +193,14 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
           Không có bài tập phù hợp với bộ lọc đã chọn.
         </div>
       ) : null}
-      {!error && !loading ? <ProblemList problems={visibleProblems} solvedProblemIds={solvedProblemIds} onSelect={openProblem} /> : null}
+      {!error && !loading ? (
+        <>
+          <ProblemList problems={pageProblems} solvedProblemIds={solvedProblemIds} onSelect={openProblem} startIndex={pageStart} />
+          {visibleProblems.length > problemsPerPage ? (
+            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+          ) : null}
+        </>
+      ) : null}
     </section>
   )
 }
@@ -226,10 +260,11 @@ function returnToProblemList() {
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
-function ProblemList({ problems, solvedProblemIds, onSelect }: {
+function ProblemList({ problems, solvedProblemIds, onSelect, startIndex }: {
   problems: ProgrammingProblemSummary[]
   solvedProblemIds: Set<string>
   onSelect: (slug: string) => void
+  startIndex: number
 }) {
   return (
     <div className="mt-5 space-y-3">
@@ -279,12 +314,50 @@ function ProblemList({ problems, solvedProblemIds, onSelect }: {
 
             {/* Problem Index */}
             <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-600 group-hover:border-blue-300 group-hover:text-blue-700">
-              #{String(index + 1).padStart(2, '0')}
+              #{String(startIndex + index + 1).padStart(2, '0')}
             </span>
           </button>
         )
       })}
     </div>
+  )
+}
+
+function Pagination({ page, totalPages, onChange }: {
+  page: number
+  totalPages: number
+  onChange: (page: number) => void
+}) {
+  return (
+    <nav className="mt-6 flex flex-wrap items-center justify-center gap-2" aria-label="Phân trang bài tập">
+      <button
+        type="button"
+        disabled={page === 1}
+        onClick={() => onChange(page - 1)}
+        className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Trước
+      </button>
+      {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+        <button
+          key={pageNumber}
+          type="button"
+          aria-current={pageNumber === page ? 'page' : undefined}
+          onClick={() => onChange(pageNumber)}
+          className={`grid h-9 min-w-9 place-items-center rounded-xl px-2 text-xs font-black transition ${pageNumber === page ? 'bg-blue-600 text-white shadow-sm' : 'border border-blue-100 bg-white text-blue-700 hover:bg-blue-50'}`}
+        >
+          {pageNumber}
+        </button>
+      ))}
+      <button
+        type="button"
+        disabled={page === totalPages}
+        onClick={() => onChange(page + 1)}
+        className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Sau
+      </button>
+    </nav>
   )
 }
 

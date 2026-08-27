@@ -7,10 +7,12 @@ import type {
   ProgrammingProblemDetail,
   ProgrammingProblemSummary,
   SubmissionLanguage,
+  CreateProgrammingProblem,
 } from '../types/programmingProblem'
+import { getStoredAccessToken } from '../../auth/api/authApi'
 
 function storedAccessToken(): string | null {
-  return window.localStorage.getItem('devedu.accessToken') ?? window.localStorage.getItem('accessToken')
+  return getStoredAccessToken()
 }
 
 export async function runProgrammingProblemCode(
@@ -50,6 +52,29 @@ export async function getProgrammingProblem(
   const response = await fetch(`/api/problems/${encodeURIComponent(slug)}`)
   if (!response.ok) {
     throw new Error(response.status === 404 ? 'Không tìm thấy bài tập.' : 'Không thể tải đề bài.')
+  }
+  return response.json() as Promise<ProgrammingProblemDetail>
+}
+
+export async function createProgrammingProblem(
+  request: CreateProgrammingProblem,
+): Promise<ProgrammingProblemDetail> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+
+  const response = await fetch('/api/teacher/problems', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 401) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  if (response.status === 403) throw new Error('Chỉ giáo viên hoặc quản trị viên được thêm bài tập.')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể thêm bài tập.')
   }
   return response.json() as Promise<ProgrammingProblemDetail>
 }

@@ -5,7 +5,9 @@ import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
+import com.devedu.learningplatform.domain.model.ProblemTestCase;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,9 +18,12 @@ import java.util.stream.Collectors;
 public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRepository {
 
     private final SpringDataProgrammingProblemRepository repository;
+    private final SpringDataProblemTestCaseRepository testCaseRepository;
 
-    public ProgrammingProblemRepositoryAdapter(SpringDataProgrammingProblemRepository repository) {
+    public ProgrammingProblemRepositoryAdapter(SpringDataProgrammingProblemRepository repository,
+                                               SpringDataProblemTestCaseRepository testCaseRepository) {
         this.repository = repository;
+        this.testCaseRepository = testCaseRepository;
     }
 
     @Override
@@ -30,6 +35,33 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
     @Override
     public Optional<ProgrammingProblem> findBySlug(String slug) {
         return repository.findBySlug(slug).map(this::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public ProgrammingProblem saveWithTestCases(ProgrammingProblem problem, List<ProblemTestCase> testCases) {
+        var saved = repository.save(toEntity(problem));
+        testCaseRepository.saveAll(testCases.stream().map(this::toEntity).toList());
+        return toDomain(saved);
+    }
+
+    private ProgrammingProblemJpaEntity toEntity(ProgrammingProblem problem) {
+        var languages = problem.allowedLanguages().stream()
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining(","));
+        return new ProgrammingProblemJpaEntity(
+                problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
+                problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
+                languages, problem.createdAt()
+        );
+    }
+
+    private ProblemTestCaseJpaEntity toEntity(ProblemTestCase testCase) {
+        return new ProblemTestCaseJpaEntity(
+                testCase.id(), testCase.problemId(), testCase.input(), testCase.expectedOutput(),
+                testCase.timeLimitMillis(), testCase.position()
+        );
     }
 
     private ProgrammingProblem toDomain(ProgrammingProblemJpaEntity entity) {

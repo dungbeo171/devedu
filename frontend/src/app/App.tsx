@@ -6,8 +6,7 @@ import { InterviewModule } from '../features/interview/components/InterviewModul
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
 import { AuthPage } from '../features/auth/components/AuthPage'
 import { OAuthCallbackPage } from '../features/auth/components/OAuthCallbackPage'
-import { clearAuthentication } from '../features/auth/api/authApi'
-import type { AuthenticatedUser } from '../features/auth/types/auth'
+import { clearAuthentication, getStoredUser } from '../features/auth/api/authApi'
 import { AdminUsersPage } from '../features/admin-users/components/AdminUsersPage'
 import { FlashToast } from '../shared/components/FlashToast'
 import { setPendingFlash, takePendingFlash } from '../shared/flashMessage'
@@ -105,7 +104,7 @@ function problemSlugFromPath(pathname: string): string | null {
 }
 
 function SiteHeader({ pathname }: { pathname: string }) {
-  const user = storedUser()
+  const user = getStoredUser()
   const visibleNavigationRoutes = user?.role === 'ADMIN' ? [...navigationRoutes, adminRoute] : navigationRoutes
 
   function logout() {
@@ -227,17 +226,6 @@ function SiteHeader({ pathname }: { pathname: string }) {
       </nav>
     </header>
   )
-}
-
-function storedUser(): AuthenticatedUser | null {
-  try {
-    const value = localStorage.getItem('devedu.user')
-    if (!value) return null
-    const user = JSON.parse(value) as AuthenticatedUser
-    return { ...user, name: user.name?.trim() || user.email.split('@')[0] }
-  } catch {
-    return null
-  }
 }
 
 function avatarInitial(name: string) {

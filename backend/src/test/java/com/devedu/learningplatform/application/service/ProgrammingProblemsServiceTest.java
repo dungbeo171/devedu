@@ -3,6 +3,8 @@ package com.devedu.learningplatform.application.service;
 import com.devedu.learningplatform.application.exception.ProgrammingProblemNotFoundException;
 import com.devedu.learningplatform.application.port.in.command.SubmitProblemCommand;
 import com.devedu.learningplatform.application.port.in.command.SaveProblemDraftCommand;
+import com.devedu.learningplatform.application.port.in.command.CreateProblemTestCaseCommand;
+import com.devedu.learningplatform.application.port.in.command.CreateProgrammingProblemCommand;
 import com.devedu.learningplatform.application.port.in.result.JudgeResult;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
@@ -63,6 +65,28 @@ class ProgrammingProblemsServiceTest {
         assertThat(problem.slug()).isEqualTo("binary-search");
         assertThat(problem.sampleInput()).isEqualTo("3\n1 2 3\n2\n");
         assertThat(problem.sampleOutput()).isEqualTo("1\n");
+    }
+
+    @Test
+    void createsAProblemWithHiddenTestCases() {
+        var created = service.create(new CreateProgrammingProblemCommand(
+                "tong-ba-so",
+                "Tổng ba số",
+                "Tính tổng ba số nguyên.",
+                "Đọc ba số nguyên và in tổng.",
+                "1 2 3",
+                "6",
+                ProblemTopic.INTRODUCTION,
+                ProblemDifficulty.EASY,
+                Set.of(CodeLanguage.CPP, CodeLanguage.JAVA, CodeLanguage.PYTHON),
+                List.of(new CreateProblemTestCaseCommand("1 2 3", "6", 1000))
+        ));
+
+        assertThat(created.slug()).isEqualTo("tong-ba-so");
+        assertThat(problemRepository.saved).isEqualTo(created);
+        assertThat(problemRepository.savedTestCases).hasSize(1);
+        assertThat(problemRepository.savedTestCases.get(0).problemId()).isEqualTo(created.id());
+        assertThat(problemRepository.savedTestCases.get(0).expectedOutput()).isEqualTo("6");
     }
 
     @Test
@@ -150,6 +174,8 @@ class ProgrammingProblemsServiceTest {
         private ProblemTopic lastTopic;
         private ProblemDifficulty lastDifficulty;
         private CodeLanguage lastLanguage;
+        private ProgrammingProblem saved;
+        private List<ProblemTestCase> savedTestCases = List.of();
 
         @Override
         public List<ProgrammingProblem> findAll(ProblemTopic topic, ProblemDifficulty difficulty, CodeLanguage language) {
@@ -162,6 +188,13 @@ class ProgrammingProblemsServiceTest {
         @Override
         public Optional<ProgrammingProblem> findBySlug(String slug) {
             return problem.slug().equals(slug) ? Optional.of(problem) : Optional.empty();
+        }
+
+        @Override
+        public ProgrammingProblem saveWithTestCases(ProgrammingProblem problem, List<ProblemTestCase> testCases) {
+            saved = problem;
+            savedTestCases = testCases;
+            return problem;
         }
     }
 

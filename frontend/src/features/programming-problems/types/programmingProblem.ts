@@ -54,6 +54,25 @@ export interface ProgrammingProblemDraft {
   updatedAt: string
 }
 
+export interface CreateProblemTestCase {
+  input: string
+  expectedOutput: string
+  timeLimitMillis: number
+}
+
+export interface CreateProgrammingProblem {
+  slug: string
+  title: string
+  summary: string
+  description: string
+  sampleInput: string
+  sampleOutput: string
+  topic: ProblemTopic
+  difficulty: ProblemDifficulty
+  allowedLanguages: SubmissionLanguage[]
+  testCases: CreateProblemTestCase[]
+}
+
 export const topicLabels: Record<ProblemTopic, string> = {
   INTRODUCTION: 'Nhập môn lập trình',
   CPP: 'C++',

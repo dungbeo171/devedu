@@ -3,6 +3,7 @@ package com.devedu.learningplatform.presentation.rest;
 import com.devedu.learningplatform.application.exception.EmailAlreadyExistsException;
 import com.devedu.learningplatform.application.exception.InvalidCredentialsException;
 import com.devedu.learningplatform.application.exception.ProgrammingProblemNotFoundException;
+import com.devedu.learningplatform.application.exception.ProgrammingProblemSlugAlreadyExistsException;
 import com.devedu.learningplatform.application.exception.CourseManagementForbiddenException;
 import com.devedu.learningplatform.application.exception.CourseResourceNotFoundException;
 import com.devedu.learningplatform.application.exception.CourseSlugAlreadyExistsException;
@@ -50,6 +51,14 @@ public class ApiExceptionHandler {
             HttpServletRequest request
     ) {
         return error(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(ProgrammingProblemSlugAlreadyExistsException.class)
+    ResponseEntity<ApiErrorResponse> handleDuplicateProblemSlug(
+            ProgrammingProblemSlugAlreadyExistsException exception,
+            HttpServletRequest request
+    ) {
+        return error(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 
     @ExceptionHandler(CourseResourceNotFoundException.class)

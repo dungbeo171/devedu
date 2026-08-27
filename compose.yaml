@@ -26,7 +26,7 @@ services:
       - JUDGE_WORKSPACE_ROOT=/judge-workspaces
       - JUDGE_WORKSPACE_VOLUME=devedu_judge_workspaces
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set in .env}
-      - JWT_EXPIRATION=${JWT_EXPIRATION:-PT1H}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-P7D}
       - ADMIN_NAME=${ADMIN_NAME:-}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}

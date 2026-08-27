@@ -1,11 +1,13 @@
 package com.devedu.learningplatform.application.service;
 
 import com.devedu.learningplatform.application.exception.ProgrammingProblemNotFoundException;
+import com.devedu.learningplatform.application.exception.ProgrammingProblemSlugAlreadyExistsException;
 import com.devedu.learningplatform.application.port.in.ProgrammingProblemsUseCase;
 import com.devedu.learningplatform.application.port.in.CodeJudgeUseCase;
 import com.devedu.learningplatform.application.port.in.command.JudgeSubmissionCommand;
 import com.devedu.learningplatform.application.port.in.command.SubmitProblemCommand;
 import com.devedu.learningplatform.application.port.in.command.SaveProblemDraftCommand;
+import com.devedu.learningplatform.application.port.in.command.CreateProgrammingProblemCommand;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
@@ -16,6 +18,7 @@ import com.devedu.learningplatform.domain.model.ProblemTopic;
 import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
+import com.devedu.learningplatform.domain.model.ProblemTestCase;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -30,6 +33,8 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
 
     private static final int MAXIMUM_SOURCE_CODE_LENGTH = 100_000;
     private static final int MAXIMUM_INPUT_LENGTH = 100_000;
+    private static final int MAXIMUM_DESCRIPTION_LENGTH = 50_000;
+    private static final int MAXIMUM_TEST_CASES = 50;
 
     private final ProgrammingProblemRepository problemRepository;
     private final ProblemSubmissionRepository submissionRepository;
@@ -64,6 +69,65 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         var normalizedSlug = normalizeSlug(slug);
         return problemRepository.findBySlug(normalizedSlug)
                 .orElseThrow(() -> new ProgrammingProblemNotFoundException(normalizedSlug));
+    }
+
+    @Override
+    public ProgrammingProblem create(CreateProgrammingProblemCommand command) {
+        Objects.requireNonNull(command, "Create programming problem command is required");
+        var slug = normalizeSlug(command.slug());
+        if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 120) {
+            throw new IllegalArgumentException("Slug must contain at most 120 lowercase letters, numbers and hyphens");
+        }
+        requireLength(command.title(), "Title", 180);
+        requireLength(command.summary(), "Summary", 500);
+        requireLength(command.description(), "Description", MAXIMUM_DESCRIPTION_LENGTH);
+        requireMaximumLength(command.sampleInput(), "Sample input", MAXIMUM_INPUT_LENGTH);
+        requireMaximumLength(command.sampleOutput(), "Sample output", MAXIMUM_INPUT_LENGTH);
+        Objects.requireNonNull(command.topic(), "Problem topic is required");
+        Objects.requireNonNull(command.difficulty(), "Problem difficulty is required");
+        if (command.allowedLanguages() == null || command.allowedLanguages().isEmpty()) {
+            throw new IllegalArgumentException("At least one allowed language is required");
+        }
+        if (command.testCases() == null || command.testCases().isEmpty()) {
+            throw new IllegalArgumentException("At least one test case is required");
+        }
+        if (command.testCases().size() > MAXIMUM_TEST_CASES) {
+            throw new IllegalArgumentException("Test cases must not exceed 50");
+        }
+        if (problemRepository.findBySlug(slug).isPresent()) {
+            throw new ProgrammingProblemSlugAlreadyExistsException(slug);
+        }
+
+        var problemId = UUID.randomUUID();
+        var problem = new ProgrammingProblem(
+                problemId,
+                slug,
+                command.title(),
+                command.summary(),
+                command.description(),
+                command.sampleInput(),
+                command.sampleOutput(),
+                command.topic(),
+                command.difficulty(),
+                command.allowedLanguages(),
+                Instant.now(clock)
+        );
+        var testCases = java.util.stream.IntStream.range(0, command.testCases().size())
+                .mapToObj(index -> {
+                    var requested = Objects.requireNonNull(command.testCases().get(index), "Test case is required");
+                    requireMaximumLength(requested.input(), "Test case input", MAXIMUM_INPUT_LENGTH);
+                    requireMaximumLength(requested.expectedOutput(), "Expected output", MAXIMUM_INPUT_LENGTH);
+                    return new ProblemTestCase(
+                            UUID.randomUUID(),
+                            problemId,
+                            requested.input(),
+                            requested.expectedOutput(),
+                            requested.timeLimitMillis(),
+                            index + 1
+                    );
+                })
+                .toList();
+        return problemRepository.saveWithTestCases(problem, testCases);
     }
 
     @Override
@@ -164,5 +228,16 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
             throw new IllegalArgumentException("Problem slug is required");
         }
         return slug.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void requireLength(String value, String field, int maximumLength) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " is required");
+        requireMaximumLength(value, field, maximumLength);
+    }
+
+    private void requireMaximumLength(String value, String field, int maximumLength) {
+        if (value != null && value.length() > maximumLength) {
+            throw new IllegalArgumentException(field + " must not exceed " + maximumLength + " characters");
+        }
     }
 }
