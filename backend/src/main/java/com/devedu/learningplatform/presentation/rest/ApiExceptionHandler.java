@@ -15,6 +15,7 @@ import com.devedu.learningplatform.application.exception.InterviewQuestionNotFou
 import com.devedu.learningplatform.application.exception.JudgeUnavailableException;
 import com.devedu.learningplatform.application.exception.UserManagementForbiddenException;
 import com.devedu.learningplatform.application.exception.UserNotFoundException;
+import com.devedu.learningplatform.application.exception.UserDeletionConflictException;
 import com.devedu.learningplatform.presentation.rest.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -122,6 +123,12 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> handleUserManagementForbidden(UserManagementForbiddenException exception,
                                                                     HttpServletRequest request) {
         return error(HttpStatus.FORBIDDEN, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UserDeletionConflictException.class)
+    ResponseEntity<ApiErrorResponse> handleUserDeletionConflict(UserDeletionConflictException exception,
+                                                                 HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class,

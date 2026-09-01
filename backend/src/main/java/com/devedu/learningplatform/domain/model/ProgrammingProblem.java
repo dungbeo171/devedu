@@ -2,6 +2,7 @@ package com.devedu.learningplatform.domain.model;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -16,6 +17,7 @@ public record ProgrammingProblem(
         ProblemTopic topic,
         ProblemDifficulty difficulty,
         Set<CodeLanguage> allowedLanguages,
+        Map<CodeLanguage, String> starterCodes,
         Instant createdAt
 ) {
 
@@ -33,6 +35,19 @@ public record ProgrammingProblem(
             throw new IllegalArgumentException("At least one allowed language is required");
         }
         allowedLanguages = Set.copyOf(allowedLanguages);
+        if (starterCodes == null) {
+            throw new IllegalArgumentException("Starter code is required for every allowed language");
+        }
+        if (!allowedLanguages.containsAll(starterCodes.keySet())) {
+            throw new IllegalArgumentException("Starter code contains a language that is not allowed");
+        }
+        for (var language : allowedLanguages) {
+            var starterCode = starterCodes.get(language);
+            if (starterCode == null || starterCode.isBlank()) {
+                throw new IllegalArgumentException("Starter code is required for " + language);
+            }
+        }
+        starterCodes = Map.copyOf(starterCodes);
         Objects.requireNonNull(createdAt, "Problem created time is required");
     }
 

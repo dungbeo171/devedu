@@ -8,6 +8,10 @@ import com.devedu.learningplatform.application.port.in.command.JudgeSubmissionCo
 import com.devedu.learningplatform.application.port.in.command.SubmitProblemCommand;
 import com.devedu.learningplatform.application.port.in.command.SaveProblemDraftCommand;
 import com.devedu.learningplatform.application.port.in.command.CreateProgrammingProblemCommand;
+import com.devedu.learningplatform.application.port.in.command.RunProblemTestsCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateProgrammingProblemCommand;
+import com.devedu.learningplatform.application.port.in.command.CreateProblemTestCaseCommand;
+import com.devedu.learningplatform.application.port.in.result.ManagedProgrammingProblem;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
@@ -75,26 +79,10 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
     public ProgrammingProblem create(CreateProgrammingProblemCommand command) {
         Objects.requireNonNull(command, "Create programming problem command is required");
         var slug = normalizeSlug(command.slug());
-        if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 120) {
-            throw new IllegalArgumentException("Slug must contain at most 120 lowercase letters, numbers and hyphens");
-        }
-        requireLength(command.title(), "Title", 180);
-        requireLength(command.summary(), "Summary", 500);
-        requireLength(command.description(), "Description", MAXIMUM_DESCRIPTION_LENGTH);
-        requireMaximumLength(command.sampleInput(), "Sample input", MAXIMUM_INPUT_LENGTH);
-        requireMaximumLength(command.sampleOutput(), "Sample output", MAXIMUM_INPUT_LENGTH);
-        Objects.requireNonNull(command.topic(), "Problem topic is required");
-        Objects.requireNonNull(command.difficulty(), "Problem difficulty is required");
-        if (command.allowedLanguages() == null || command.allowedLanguages().isEmpty()) {
-            throw new IllegalArgumentException("At least one allowed language is required");
-        }
-        if (command.testCases() == null || command.testCases().isEmpty()) {
-            throw new IllegalArgumentException("At least one test case is required");
-        }
-        if (command.testCases().size() > MAXIMUM_TEST_CASES) {
-            throw new IllegalArgumentException("Test cases must not exceed 50");
-        }
-        if (problemRepository.findBySlug(slug).isPresent()) {
+        validateProblemFields(slug, command.title(), command.summary(), command.description(),
+                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
+                command.allowedLanguages(), command.starterCodes(), command.testCases());
+        if (problemRepository.existsBySlug(slug)) {
             throw new ProgrammingProblemSlugAlreadyExistsException(slug);
         }
 
@@ -110,24 +98,57 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
                 command.topic(),
                 command.difficulty(),
                 command.allowedLanguages(),
+                command.starterCodes(),
                 Instant.now(clock)
         );
-        var testCases = java.util.stream.IntStream.range(0, command.testCases().size())
-                .mapToObj(index -> {
-                    var requested = Objects.requireNonNull(command.testCases().get(index), "Test case is required");
-                    requireMaximumLength(requested.input(), "Test case input", MAXIMUM_INPUT_LENGTH);
-                    requireMaximumLength(requested.expectedOutput(), "Expected output", MAXIMUM_INPUT_LENGTH);
-                    return new ProblemTestCase(
-                            UUID.randomUUID(),
-                            problemId,
-                            requested.input(),
-                            requested.expectedOutput(),
-                            requested.timeLimitMillis(),
-                            index + 1
-                    );
-                })
-                .toList();
+        var testCases = createTestCases(problemId, command.testCases());
         return problemRepository.saveWithTestCases(problem, testCases);
+    }
+
+    @Override
+    public ManagedProgrammingProblem getForManagement(String slug) {
+        var problem = getBySlug(slug);
+        return new ManagedProgrammingProblem(problem, testCaseRepository.findAllByProblemId(problem.id()));
+    }
+
+    @Override
+    public ProgrammingProblem update(UpdateProgrammingProblemCommand command) {
+        Objects.requireNonNull(command, "Update programming problem command is required");
+        var existing = getBySlug(command.currentSlug());
+        var slug = normalizeSlug(command.slug());
+        validateProblemFields(slug, command.title(), command.summary(), command.description(),
+                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
+                command.allowedLanguages(), command.starterCodes(), command.testCases());
+        if (!existing.slug().equals(slug) && problemRepository.existsBySlug(slug)) {
+            throw new ProgrammingProblemSlugAlreadyExistsException(slug);
+        }
+        var updated = new ProgrammingProblem(
+                existing.id(), slug, command.title(), command.summary(), command.description(),
+                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
+                command.allowedLanguages(), command.starterCodes(), existing.createdAt()
+        );
+        return problemRepository.saveWithTestCases(updated, createTestCases(existing.id(), command.testCases()));
+    }
+
+    @Override
+    public void delete(String slug) {
+        var problem = getBySlug(slug);
+        problemRepository.deleteById(problem.id());
+    }
+
+    @Override
+    public com.devedu.learningplatform.application.port.in.result.JudgeResult runTests(RunProblemTestsCommand command) {
+        Objects.requireNonNull(command, "Run problem tests command is required");
+        Objects.requireNonNull(command.language(), "Run language is required");
+        requireSourceCode(command.sourceCode());
+        var problem = getBySlug(command.problemSlug());
+        requireAllowedLanguage(problem, command.language());
+        return codeJudge.judge(new JudgeSubmissionCommand(
+                UUID.randomUUID(),
+                command.language(),
+                command.sourceCode(),
+                testCaseRepository.findAllByProblemId(problem.id())
+        ));
     }
 
     @Override
@@ -135,12 +156,7 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         Objects.requireNonNull(command, "Submit problem command is required");
         Objects.requireNonNull(command.studentId(), "Student id is required");
         Objects.requireNonNull(command.language(), "Submission language is required");
-        if (command.sourceCode() == null || command.sourceCode().isBlank()) {
-            throw new IllegalArgumentException("Source code is required");
-        }
-        if (command.sourceCode().length() > MAXIMUM_SOURCE_CODE_LENGTH) {
-            throw new IllegalArgumentException("Source code must not exceed 100000 characters");
-        }
+        requireSourceCode(command.sourceCode());
 
         var problem = getBySlug(command.problemSlug());
         requireAllowedLanguage(problem, command.language());
@@ -221,6 +237,75 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         if (!problem.allowedLanguages().contains(language)) {
             throw new IllegalArgumentException("Language " + language + " is not allowed for this problem");
         }
+    }
+
+    private void requireSourceCode(String sourceCode) {
+        if (sourceCode == null || sourceCode.isBlank()) {
+            throw new IllegalArgumentException("Source code is required");
+        }
+        if (sourceCode.length() > MAXIMUM_SOURCE_CODE_LENGTH) {
+            throw new IllegalArgumentException("Source code must not exceed 100000 characters");
+        }
+    }
+
+    private void validateProblemFields(
+            String slug,
+            String title,
+            String summary,
+            String description,
+            String sampleInput,
+            String sampleOutput,
+            ProblemTopic topic,
+            ProblemDifficulty difficulty,
+            Set<CodeLanguage> allowedLanguages,
+            java.util.Map<CodeLanguage, String> starterCodes,
+            List<CreateProblemTestCaseCommand> testCases
+    ) {
+        if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 120) {
+            throw new IllegalArgumentException("Slug must contain at most 120 lowercase letters, numbers and hyphens");
+        }
+        requireLength(title, "Title", 180);
+        requireLength(summary, "Summary", 500);
+        requireLength(description, "Description", MAXIMUM_DESCRIPTION_LENGTH);
+        requireMaximumLength(sampleInput, "Sample input", MAXIMUM_INPUT_LENGTH);
+        requireMaximumLength(sampleOutput, "Sample output", MAXIMUM_INPUT_LENGTH);
+        Objects.requireNonNull(topic, "Problem topic is required");
+        Objects.requireNonNull(difficulty, "Problem difficulty is required");
+        if (allowedLanguages == null || allowedLanguages.isEmpty()) {
+            throw new IllegalArgumentException("At least one allowed language is required");
+        }
+        if (starterCodes == null) {
+            throw new IllegalArgumentException("Starter code is required for every allowed language");
+        }
+        for (var language : allowedLanguages) {
+            var starterCode = starterCodes.get(language);
+            if (starterCode == null || starterCode.isBlank()) {
+                throw new IllegalArgumentException("Starter code is required for " + language);
+            }
+            if (starterCode.length() > MAXIMUM_SOURCE_CODE_LENGTH) {
+                throw new IllegalArgumentException("Starter code must not exceed 100000 characters");
+            }
+        }
+        if (testCases == null || testCases.isEmpty()) {
+            throw new IllegalArgumentException("At least one test case is required");
+        }
+        if (testCases.size() > MAXIMUM_TEST_CASES) {
+            throw new IllegalArgumentException("Test cases must not exceed 50");
+        }
+    }
+
+    private List<ProblemTestCase> createTestCases(UUID problemId, List<CreateProblemTestCaseCommand> requestedTestCases) {
+        return java.util.stream.IntStream.range(0, requestedTestCases.size())
+                .mapToObj(index -> {
+                    var requested = Objects.requireNonNull(requestedTestCases.get(index), "Test case is required");
+                    requireMaximumLength(requested.input(), "Test case input", MAXIMUM_INPUT_LENGTH);
+                    requireMaximumLength(requested.expectedOutput(), "Expected output", MAXIMUM_INPUT_LENGTH);
+                    return new ProblemTestCase(
+                            UUID.randomUUID(), problemId, requested.input(), requested.expectedOutput(),
+                            requested.timeLimitMillis(), index + 1
+                    );
+                })
+                .toList();
     }
 
     private String normalizeSlug(String slug) {

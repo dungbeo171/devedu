@@ -4,6 +4,8 @@ import { CourseLearning } from '../features/course-learning/components/CourseLea
 import { ExamModule } from '../features/exam/components/ExamModule'
 import { InterviewModule } from '../features/interview/components/InterviewModule'
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
+import { AddProgrammingProblemPage } from '../features/programming-problems/components/AddProgrammingProblemPage'
+import { EditProgrammingProblemPage } from '../features/programming-problems/components/EditProgrammingProblemPage'
 import { AuthPage } from '../features/auth/components/AuthPage'
 import { OAuthCallbackPage } from '../features/auth/components/OAuthCallbackPage'
 import { clearAuthentication, getStoredUser } from '../features/auth/api/authApi'
@@ -63,7 +65,12 @@ export function App() {
   const [pathname, setPathname] = useState(normalizedPathname)
   const [flashMessage, setFlashMessage] = useState(takePendingFlash)
   const problemSlug = problemSlugFromPath(pathname)
-  const route = problemSlug
+  const editProblemSlug = editProblemSlugFromPath(pathname)
+  const route = pathname === '/problems/add'
+    ? { path: pathname, label: 'Thêm bài tập', title: 'Thêm bài tập · DevEdu', content: <AddProgrammingProblemPage />, icon: IconCode }
+    : editProblemSlug
+    ? { path: pathname, label: 'Sửa bài tập', title: 'Sửa bài tập · DevEdu', content: <EditProgrammingProblemPage slug={editProblemSlug} />, icon: IconCode }
+    : problemSlug
     ? { path: pathname, label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems slug={problemSlug} />, icon: IconCode }
     : routes.find((candidate) => candidate.path === pathname)
 
@@ -89,6 +96,16 @@ export function App() {
       <SiteFooter />
     </div>
   )
+}
+
+function editProblemSlugFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/problems\/([^/]+)\/edit$/)
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
 }
 
 function problemSlugFromPath(pathname: string): string | null {

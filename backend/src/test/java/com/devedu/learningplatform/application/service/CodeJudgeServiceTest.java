@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CodeJudgeServiceTest {
     @Test void delegatesExecutionToSandboxPort() {
-        var expected = new JudgeResult(SubmissionStatus.ACCEPTED, "ok", 1, 1, 20);
+        var expected = new JudgeResult(SubmissionStatus.ACCEPTED, "ok", 1, 1, 20, List.of());
         var service = new CodeJudgeService(command -> expected);
         var testCase = new ProblemTestCase(UUID.randomUUID(), UUID.randomUUID(), "1", "1", 1000, 1);
         assertThat(service.judge(new JudgeSubmissionCommand(UUID.randomUUID(), CodeLanguage.PYTHON, "print(1)", List.of(testCase)))).isEqualTo(expected);

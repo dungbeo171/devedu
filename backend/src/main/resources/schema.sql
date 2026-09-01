@@ -131,6 +131,8 @@ ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS sample_input TEXT NOT 
 ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS sample_output TEXT NOT NULL DEFAULT '';
 ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20) NOT NULL DEFAULT 'EASY';
 ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS allowed_languages VARCHAR(100) NOT NULL DEFAULT 'CPP,JAVA,PYTHON';
+ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS starter_codes TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE programming_problems ADD COLUMN IF NOT EXISTS deleted BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE programming_problems DROP CONSTRAINT IF EXISTS programming_problems_difficulty_check;
 ALTER TABLE programming_problems ADD CONSTRAINT programming_problems_difficulty_check
     CHECK (difficulty IN ('EASY', 'MEDIUM', 'HARD'));
@@ -495,6 +497,30 @@ ON CONFLICT (id) DO UPDATE SET
     sample_output = EXCLUDED.sample_output,
     topic = EXCLUDED.topic;
 
+-- Older startup scripts applied seed defaults to every row, including problems
+-- created by teachers. Restore those rows from their saved starter-code keys
+-- before applying defaults only to the bundled seed data below.
+UPDATE programming_problems AS problem
+SET allowed_languages = restored.allowed_languages
+FROM (
+    SELECT id,
+           string_agg(language, ',' ORDER BY CASE language
+               WHEN 'CPP' THEN 1
+               WHEN 'JAVA' THEN 2
+               WHEN 'PYTHON' THEN 3
+               WHEN 'HTML' THEN 4
+               WHEN 'MYSQL' THEN 5
+               ELSE 6
+           END) AS allowed_languages
+    FROM programming_problems
+    CROSS JOIN LATERAL jsonb_object_keys(starter_codes::jsonb) AS language
+    WHERE id::text NOT LIKE '10000000-0000-0000-0000-%'
+      AND jsonb_typeof(starter_codes::jsonb) = 'object'
+    GROUP BY id
+) AS restored
+WHERE problem.id = restored.id
+  AND restored.allowed_languages <> '';
+
 UPDATE programming_problems
 SET allowed_languages = CASE topic
     WHEN 'CPP' THEN 'CPP'
@@ -502,10 +528,62 @@ SET allowed_languages = CASE topic
     WHEN 'PYTHON' THEN 'PYTHON'
     WHEN 'SQL' THEN 'MYSQL'
     ELSE 'CPP,JAVA,PYTHON'
-END;
-UPDATE programming_problems SET allowed_languages = 'HTML' WHERE slug = 'tieu-de-devedu';
+END
+WHERE id::text LIKE '10000000-0000-0000-0000-%';
+UPDATE programming_problems
+SET allowed_languages = 'HTML'
+WHERE id::text LIKE '10000000-0000-0000-0000-%'
+  AND slug = 'tieu-de-devedu';
 
-UPDATE programming_problems SET difficulty = 'EASY';
+UPDATE programming_problems
+SET starter_codes = (
+    CASE WHEN POSITION('CPP' IN allowed_languages) > 0 THEN jsonb_build_object(
+        'CPP', E'#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // TODO: ' || title || E'\n    return 0;\n}\n'
+    ) ELSE '{}'::jsonb END
+    || CASE WHEN POSITION('JAVA' IN allowed_languages) > 0 THEN jsonb_build_object(
+        'JAVA', E'import java.io.*;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) throws Exception {\n        Scanner scanner = new Scanner(System.in);\n\n        // TODO: ' || title || E'\n    }\n}\n'
+    ) ELSE '{}'::jsonb END
+    || CASE WHEN POSITION('PYTHON' IN allowed_languages) > 0 THEN jsonb_build_object(
+        'PYTHON', E'import sys\n\n# TODO: ' || title || E'\ndef solve():\n    pass\n\nif __name__ == "__main__":\n    solve()\n'
+    ) ELSE '{}'::jsonb END
+    || CASE WHEN POSITION('HTML' IN allowed_languages) > 0 THEN jsonb_build_object(
+        'HTML', E'<!doctype html>\n<html lang="vi">\n<head>\n  <meta charset="UTF-8">\n  <title>' || title || E'</title>\n</head>\n<body>\n  <!-- TODO: Hoàn thành ' || title || E' -->\n</body>\n</html>\n'
+    ) ELSE '{}'::jsonb END
+    || CASE WHEN POSITION('MYSQL' IN allowed_languages) > 0 THEN jsonb_build_object(
+        'MYSQL', E'-- ' || title || E'\n-- Viết truy vấn của bạn bên dưới\nSELECT *\nFROM your_table;\n'
+    ) ELSE '{}'::jsonb END
+)::text
+WHERE starter_codes = '{}'
+  AND id::text LIKE '10000000-0000-0000-0000-%';
+
+UPDATE programming_problems
+SET starter_codes = jsonb_set(
+        starter_codes::jsonb,
+        '{CPP}',
+        to_jsonb(
+            replace(
+                replace(starter_codes::jsonb ->> 'CPP', E'    ios::sync_with_stdio(false);\n', ''),
+                E'    cin.tie(nullptr);\n', ''
+            )
+        )
+    )::text
+WHERE starter_codes::jsonb ? 'CPP'
+  AND (
+      starter_codes::jsonb ->> 'CPP' LIKE '%ios::sync_with_stdio(false);%'
+      OR starter_codes::jsonb ->> 'CPP' LIKE '%cin.tie(nullptr);%'
+  );
+
+UPDATE problem_drafts
+SET source_code = replace(
+        replace(source_code, E'    ios::sync_with_stdio(false);\n', ''),
+        E'    cin.tie(nullptr);\n', ''
+    )
+WHERE source_code LIKE '%ios::sync_with_stdio(false);%'
+   OR source_code LIKE '%cin.tie(nullptr);%';
+
+UPDATE programming_problems
+SET difficulty = 'EASY'
+WHERE id::text LIKE '10000000-0000-0000-0000-%';
 UPDATE programming_problems SET difficulty = 'MEDIUM' WHERE slug IN (
     'so-fibonacci', 'tai-khoan-ngan-hang', 'mo-phong-ngan-xep', 'tim-kiem-nhi-phan', 'diem-cao-nhat',
     'tong-tu-mot-den-n', 'phan-tu-phan-biet', 'tong-doan', 'tan-suat-phan-tu', 'hai-chuoi-hoan-vi',

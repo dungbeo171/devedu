@@ -2,6 +2,7 @@ package com.devedu.learningplatform.presentation.rest;
 
 import com.devedu.learningplatform.application.port.in.ProgrammingProblemsUseCase;
 import com.devedu.learningplatform.application.port.in.command.SubmitProblemCommand;
+import com.devedu.learningplatform.application.port.in.command.RunProblemTestsCommand;
 import com.devedu.learningplatform.application.security.AuthenticatedUser;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
 import com.devedu.learningplatform.domain.model.ProblemDifficulty;
@@ -11,6 +12,8 @@ import com.devedu.learningplatform.presentation.rest.dto.ProblemSubmissionRespon
 import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemDetailResponse;
 import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemSummaryResponse;
 import com.devedu.learningplatform.presentation.rest.dto.SubmitProblemRequest;
+import com.devedu.learningplatform.presentation.rest.dto.ProblemTestCaseResultResponse;
+import com.devedu.learningplatform.presentation.rest.dto.ProblemTestRunResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -58,6 +61,7 @@ public class ProgrammingProblemsController {
                 problem.topic(),
                 problem.difficulty(),
                 problem.allowedLanguages(),
+                problem.starterCodes(),
                 problem.createdAt()
         );
     }
@@ -82,6 +86,27 @@ public class ProgrammingProblemsController {
                 submission.executionTimeMillis(),
                 submission.submittedAt()
         ));
+    }
+
+    @PostMapping("/{slug}/runs")
+    public ProblemTestRunResponse runTests(
+            @PathVariable String slug,
+            @RequestBody SubmitProblemRequest request
+    ) {
+        var result = programmingProblemsUseCase.runTests(
+                new RunProblemTestsCommand(slug, request.language(), request.sourceCode())
+        );
+        return new ProblemTestRunResponse(
+                result.status(),
+                result.diagnostic(),
+                result.passedTests(),
+                result.totalTests(),
+                result.executionTimeMillis(),
+                result.testCases().stream()
+                        .map(testCase -> new ProblemTestCaseResultResponse(
+                                testCase.position(), testCase.passed(), testCase.status()))
+                        .toList()
+        );
     }
 
     private ProgrammingProblemSummaryResponse toSummaryResponse(ProgrammingProblem problem) {

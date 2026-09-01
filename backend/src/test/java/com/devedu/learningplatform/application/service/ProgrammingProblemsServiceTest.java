@@ -5,6 +5,7 @@ import com.devedu.learningplatform.application.port.in.command.SubmitProblemComm
 import com.devedu.learningplatform.application.port.in.command.SaveProblemDraftCommand;
 import com.devedu.learningplatform.application.port.in.command.CreateProblemTestCaseCommand;
 import com.devedu.learningplatform.application.port.in.command.CreateProgrammingProblemCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateProgrammingProblemCommand;
 import com.devedu.learningplatform.application.port.in.result.JudgeResult;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
@@ -23,6 +24,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
@@ -44,7 +46,7 @@ class ProgrammingProblemsServiceTest {
             submissionRepository,
             draftRepository,
             problemId -> List.of(new ProblemTestCase(UUID.randomUUID(), problemId, "input", "output", 1000, 1)),
-            command -> new JudgeResult(SubmissionStatus.ACCEPTED, "All test cases passed", 1, 1, 25),
+            command -> new JudgeResult(SubmissionStatus.ACCEPTED, "All test cases passed", 1, 1, 25, List.of()),
             Clock.fixed(NOW, ZoneOffset.UTC)
     );
 
@@ -79,6 +81,11 @@ class ProgrammingProblemsServiceTest {
                 ProblemTopic.INTRODUCTION,
                 ProblemDifficulty.EASY,
                 Set.of(CodeLanguage.CPP, CodeLanguage.JAVA, CodeLanguage.PYTHON),
+                Map.of(
+                        CodeLanguage.CPP, "int main() { return 0; }",
+                        CodeLanguage.JAVA, "public class Main { public static void main(String[] args) {} }",
+                        CodeLanguage.PYTHON, "def solve():\n    pass\n"
+                ),
                 List.of(new CreateProblemTestCaseCommand("1 2 3", "6", 1000))
         ));
 
@@ -87,6 +94,33 @@ class ProgrammingProblemsServiceTest {
         assertThat(problemRepository.savedTestCases).hasSize(1);
         assertThat(problemRepository.savedTestCases.get(0).problemId()).isEqualTo(created.id());
         assertThat(problemRepository.savedTestCases.get(0).expectedOutput()).isEqualTo("6");
+    }
+
+    @Test
+    void updatesAProblemAndReplacesItsHiddenTestCases() {
+        var updated = service.update(new UpdateProgrammingProblemCommand(
+                "binary-search", "tim-kiem-nhi-phan", "Tìm kiếm nhị phân mới",
+                "Tóm tắt mới", "Đề bài mới", "5", "2", ProblemTopic.ALGORITHMS,
+                ProblemDifficulty.HARD, Set.of(CodeLanguage.CPP),
+                Map.of(CodeLanguage.CPP, "int main() { return 0; }"),
+                List.of(new CreateProblemTestCaseCommand("5", "2", 1500))
+        ));
+
+        assertThat(updated.id()).isEqualTo(problemRepository.problem.id());
+        assertThat(updated.slug()).isEqualTo("tim-kiem-nhi-phan");
+        assertThat(updated.createdAt()).isEqualTo(NOW);
+        assertThat(problemRepository.savedTestCases).singleElement()
+                .satisfies(testCase -> {
+                    assertThat(testCase.problemId()).isEqualTo(updated.id());
+                    assertThat(testCase.timeLimitMillis()).isEqualTo(1500);
+                });
+    }
+
+    @Test
+    void deletesAnExistingProblem() {
+        service.delete("binary-search");
+
+        assertThat(problemRepository.deletedProblemId).isEqualTo(problemRepository.problem.id());
     }
 
     @Test
@@ -169,6 +203,11 @@ class ProgrammingProblemsServiceTest {
                 ProblemTopic.ALGORITHMS,
                 ProblemDifficulty.MEDIUM,
                 Set.of(CodeLanguage.CPP, CodeLanguage.JAVA, CodeLanguage.PYTHON),
+                Map.of(
+                        CodeLanguage.CPP, "int main() { return 0; }",
+                        CodeLanguage.JAVA, "public class Main { public static void main(String[] args) {} }",
+                        CodeLanguage.PYTHON, "def solve():\n    pass\n"
+                ),
                 NOW
         );
         private ProblemTopic lastTopic;
@@ -176,6 +215,7 @@ class ProgrammingProblemsServiceTest {
         private CodeLanguage lastLanguage;
         private ProgrammingProblem saved;
         private List<ProblemTestCase> savedTestCases = List.of();
+        private UUID deletedProblemId;
 
         @Override
         public List<ProgrammingProblem> findAll(ProblemTopic topic, ProblemDifficulty difficulty, CodeLanguage language) {
@@ -191,10 +231,20 @@ class ProgrammingProblemsServiceTest {
         }
 
         @Override
+        public boolean existsBySlug(String slug) {
+            return problem.slug().equals(slug);
+        }
+
+        @Override
         public ProgrammingProblem saveWithTestCases(ProgrammingProblem problem, List<ProblemTestCase> testCases) {
             saved = problem;
             savedTestCases = testCases;
             return problem;
+        }
+
+        @Override
+        public void deleteById(UUID problemId) {
+            deletedProblemId = problemId;
         }
     }
 

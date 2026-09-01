@@ -1,4 +1,4 @@
-package com.devedu.learningplatform.presentation.rest.dto;
+package com.devedu.learningplatform.application.port.in.command;
 
 import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.ProblemDifficulty;
@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public record CreateProgrammingProblemRequest(
+public record UpdateProgrammingProblemCommand(
+        String currentSlug,
         String slug,
         String title,
         String summary,
@@ -19,6 +20,6 @@ public record CreateProgrammingProblemRequest(
         ProblemDifficulty difficulty,
         Set<CodeLanguage> allowedLanguages,
         Map<CodeLanguage, String> starterCodes,
-        List<CreateProblemTestCaseRequest> testCases
+        List<CreateProblemTestCaseCommand> testCases
 ) {
 }

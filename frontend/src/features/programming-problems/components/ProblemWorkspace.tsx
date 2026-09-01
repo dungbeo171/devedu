@@ -4,12 +4,14 @@ import {
   getProgrammingProblem,
   getProgrammingProblemDraft,
   runProgrammingProblemCode,
+  runProgrammingProblemTests,
   saveProgrammingProblemDraft,
   submitProgrammingProblem,
 } from '../api/programmingProblemsApi'
 import {
   topicLabels,
   type ProgrammingProblemDetail,
+  type ProblemTestCaseRunResult,
   type SubmissionLanguage,
 } from '../types/programmingProblem'
 import {
@@ -19,6 +21,7 @@ import {
   IconPlay,
   IconSave,
 } from '../../../shared/components/Icons'
+import { createStarterCode } from '../starterCode'
 
 interface ProblemWorkspaceProps {
   slug: string
@@ -26,13 +29,12 @@ interface ProblemWorkspaceProps {
   onAccepted: (problemId: string) => void
 }
 
-type RunStatus = 'SUCCESS' | 'WRONG_ANSWER' | 'EXECUTED' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
+type RunStatus = 'SUCCESS' | 'WRONG_ANSWER' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
 
 interface LanguageOption {
   value: SubmissionLanguage
   label: string
   fileName: string
-  starter: string
 }
 
 const languageOptions: LanguageOption[] = [
@@ -40,60 +42,42 @@ const languageOptions: LanguageOption[] = [
     value: 'CPP',
     label: 'C++',
     fileName: 'main.cpp',
-    starter: `#include <iostream>
-using namespace std;
-
-int main() {
-
-    return 0;
-}`,
   },
   {
     value: 'JAVA',
     label: 'Java',
     fileName: 'Main.java',
-    starter: `public class Main {
-    public static void main(String[] args) {
-
-    }
-}`,
   },
   {
     value: 'PYTHON',
     label: 'Python',
     fileName: 'main.py',
-    starter: 'pass\n',
   },
   {
     value: 'HTML',
     label: 'HTML',
     fileName: 'index.html',
-    starter: `<!doctype html>
-<html lang="vi">
-  <body>
-
-  </body>
-</html>`,
   },
   {
     value: 'MYSQL',
     label: 'MySQL',
     fileName: 'query.sql',
-    starter: 'SELECT 1;',
   },
 ]
 
 export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceProps) {
   const [problem, setProblem] = useState<ProgrammingProblemDetail | null>(null)
   const [language, setLanguage] = useState<SubmissionLanguage>('CPP')
-  const [sourceCode, setSourceCode] = useState(languageOptions[0].starter)
+  const [sourceCode, setSourceCode] = useState('')
   const [input, setInput] = useState('')
-  const [output, setOutput] = useState('Nhấn Chạy thử để xem output của chương trình.')
+  const [output, setOutput] = useState('Nhấn Chạy test để kiểm tra toàn bộ test case.')
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
+  const [runningInput, setRunningInput] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null)
+  const [testCaseResults, setTestCaseResults] = useState<ProblemTestCaseRunResult[]>([])
   const [draftReady, setDraftReady] = useState(false)
 
   useEffect(() => {
@@ -116,14 +100,14 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
         const restoredLanguage = draft && result.allowedLanguages.includes(draft.language)
           ? draft.language
           : initialLanguage
-        const option = languageOptions.find((item) => item.value === restoredLanguage) ?? languageOptions[0]
         setLanguage(restoredLanguage)
-        setSourceCode(draft?.sourceCode ?? option.starter)
+        setSourceCode(draft?.sourceCode ?? starterCodeFor(result, restoredLanguage))
         setInput(draft?.input ?? result.sampleInput)
         setOutput(result.sampleOutput
           ? `Output mẫu:\n${result.sampleOutput}`
-          : 'Nhấn Chạy thử để xem output của chương trình.')
+          : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
         setRunStatus(null)
+        setTestCaseResults([])
         setDraftReady(true)
       })
       .catch((error: unknown) => {
@@ -156,39 +140,60 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     const option = languageOptions.find((item) => item.value === nextLanguage)
     if (!option) return
     setLanguage(nextLanguage)
-    setSourceCode(option.starter)
+    setSourceCode(problem ? starterCodeFor(problem, nextLanguage) : createStarterCode(nextLanguage, ''))
     setOutput(problem?.sampleOutput
       ? `Output mẫu:\n${problem.sampleOutput}`
-      : 'Nhấn Chạy thử để xem output của chương trình.')
+      : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
     setMessage('')
     setRunStatus(null)
+    setTestCaseResults([])
   }
 
   async function runCode() {
-    if (!problem || !sourceCode.trim() || running) return
+    if (!problem || !sourceCode.trim() || running || runningInput || submitting) return
 
     setRunning(true)
     setMessage('')
     setRunStatus(null)
-    setOutput('Đang thực thi chương trình...')
+    setTestCaseResults([])
+    setOutput('Đang chạy toàn bộ test case...')
+    try {
+      await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
+      const result = await runProgrammingProblemTests(problem.slug, language, sourceCode)
+      setTestCaseResults(result.testCases)
+      setRunStatus(result.status === 'ACCEPTED' ? 'SUCCESS' : result.status)
+      setOutput(`${result.passedTests}/${result.totalTests} test case đúng · ${result.executionTimeMillis} ms\n${result.diagnostic}`)
+    } catch (error) {
+      setRunStatus(null)
+      setTestCaseResults([])
+      const reason = error instanceof Error ? error.message : ''
+      if (reason === 'AUTHENTICATION_REQUIRED') {
+        setOutput('Bạn cần đăng nhập bằng tài khoản sinh viên trước khi chạy test case.')
+      } else if (reason === 'STUDENT_ROLE_REQUIRED') {
+        setOutput('Chỉ tài khoản STUDENT có thể chạy test case.')
+      } else {
+        setOutput(reason || 'Không thể chạy test case lúc này.')
+      }
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function runCustomInput() {
+    if (!sourceCode.trim() || running || runningInput || submitting) return
+    setRunningInput(true)
+    setMessage('')
+    setRunStatus(null)
+    setTestCaseResults([])
+    setOutput('Đang chạy với input tùy chỉnh...')
     try {
       const result = await runProgrammingProblemCode(language, sourceCode, input)
       setOutput(result.output)
-      if (result.status !== 'SUCCESS') {
-        setRunStatus(result.status)
-      } else if (normalizeJudgeOutput(input) !== normalizeJudgeOutput(problem.sampleInput)) {
-        setRunStatus('EXECUTED')
-      } else if (normalizeJudgeOutput(result.output) === normalizeJudgeOutput(problem.sampleOutput)) {
-        setRunStatus('SUCCESS')
-      } else {
-        setRunStatus('WRONG_ANSWER')
-        setMessage('Kết quả chạy thử không khớp Sample Output.')
-      }
+      if (result.status !== 'SUCCESS') setRunStatus(result.status)
     } catch (error) {
-      setRunStatus(null)
-      setOutput(error instanceof Error ? error.message : 'Không thể chạy thử code lúc này.')
+      setOutput(error instanceof Error ? error.message : 'Không thể chạy input lúc này.')
     } finally {
-      setRunning(false)
+      setRunningInput(false)
     }
   }
 
@@ -342,7 +347,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               <button
                 type="button"
                 onClick={() => void runCode()}
-                disabled={running || submitting || !sourceCode.trim()}
+                disabled={running || runningInput || submitting || !sourceCode.trim()}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-800/90 px-3.5 py-1.5 text-xs font-bold text-slate-200 shadow-sm transition hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {running ? (
@@ -356,7 +361,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                 ) : (
                   <>
                     <IconPlay className="h-3 w-3 text-emerald-400" />
-                    <span>Chạy thử</span>
+                    <span>Chạy test</span>
                   </>
                 )}
               </button>
@@ -364,7 +369,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={submitting || running || !sourceCode.trim()}
+                disabled={submitting || running || runningInput || !sourceCode.trim()}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 ring-1 ring-white/20 transition hover:from-blue-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
@@ -396,6 +401,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                 onChange={(value) => {
                   setSourceCode(value)
                   setRunStatus(null)
+                  setTestCaseResults([])
                 }}
               />
             </div>
@@ -407,22 +413,31 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                   <label htmlFor="problem-input" className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Input chạy thử
                   </label>
-                  {problem.sampleInput ? (
+                  <div className="flex items-center gap-3">
+                    {problem.sampleInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setInput(problem.sampleInput)}
+                        className="font-mono text-[10px] font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                      >
+                        Khôi phục mẫu
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      onClick={() => setInput(problem.sampleInput)}
-                      className="font-mono text-[10px] font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                      onClick={() => void runCustomInput()}
+                      disabled={running || runningInput || submitting || !sourceCode.trim()}
+                      className="rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-1 font-mono text-[10px] font-bold text-blue-300 hover:bg-blue-500/25 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Khôi phục mẫu
+                      {runningInput ? 'Đang chạy...' : 'Chạy input'}
                     </button>
-                  ) : null}
+                  </div>
                 </div>
                 <textarea
                   id="problem-input"
                   value={input}
                   onChange={(event) => {
                     setInput(event.target.value)
-                    setRunStatus(null)
                   }}
                   placeholder="Có thể để trống nếu bài không cần input"
                   spellCheck={false}
@@ -438,10 +453,6 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                     <span className="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
                       <IconCheck className="h-3 w-3" /> SUCCESS
                     </span>
-                  ) : runStatus === 'EXECUTED' ? (
-                    <span className="rounded-md border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-300">
-                      ĐÃ CHẠY
-                    </span>
                   ) : runStatus === 'WRONG_ANSWER' ? (
                     <span className="rounded-md border border-rose-500/40 bg-rose-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-300">
                       WRONG ANSWER
@@ -452,6 +463,24 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                     </span>
                   ) : null}
                 </div>
+                {testCaseResults.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 border-b border-white/10 p-3">
+                    {testCaseResults.map((testCase) => (
+                      <div
+                        key={testCase.position}
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold ${
+                          testCase.passed
+                            ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                            : 'border-rose-500/40 bg-rose-500/15 text-rose-400'
+                        }`}
+                        title={testCase.status}
+                      >
+                        {testCase.passed ? <IconCheck className="h-3.5 w-3.5" /> : <span className="text-base leading-none">×</span>}
+                        <span>Test case {testCase.position}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <pre
                   aria-live="polite"
                   className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
@@ -480,9 +509,6 @@ function defaultLanguageForTopic(topic: ProgrammingProblemDetail['topic']): Subm
   return 'CPP'
 }
 
-function normalizeJudgeOutput(value: string): string {
-  const lines = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
-  const normalized = lines.map((line) => line.trimEnd())
-  while (normalized.length > 0 && normalized[normalized.length - 1] === '') normalized.pop()
-  return normalized.join('\n')
+function starterCodeFor(problem: ProgrammingProblemDetail, language: SubmissionLanguage): string {
+  return problem.starterCodes[language] ?? createStarterCode(language, problem.title)
 }

@@ -15,5 +15,9 @@ public interface ProgrammingProblemRepository {
 
     Optional<ProgrammingProblem> findBySlug(String slug);
 
+    boolean existsBySlug(String slug);
+
     ProgrammingProblem saveWithTestCases(ProgrammingProblem problem, List<ProblemTestCase> testCases);
+
+    void deleteById(java.util.UUID problemId);
 }

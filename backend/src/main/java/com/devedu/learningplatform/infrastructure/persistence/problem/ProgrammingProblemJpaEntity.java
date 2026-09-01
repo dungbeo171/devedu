@@ -48,15 +48,22 @@ class ProgrammingProblemJpaEntity {
     @Column(name = "allowed_languages", nullable = false, length = 100)
     private String allowedLanguages;
 
+    @Column(name = "starter_codes", nullable = false, columnDefinition = "TEXT")
+    private String starterCodes;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @Column(nullable = false)
+    private boolean deleted;
 
     protected ProgrammingProblemJpaEntity() {
     }
 
     ProgrammingProblemJpaEntity(UUID id, String slug, String title, String summary, String description,
                                 String sampleInput, String sampleOutput, ProblemTopic topic,
-                                ProblemDifficulty difficulty, String allowedLanguages, Instant createdAt) {
+                                ProblemDifficulty difficulty, String allowedLanguages, String starterCodes,
+                                Instant createdAt, boolean deleted) {
         this.id = id;
         this.slug = slug;
         this.title = title;
@@ -67,7 +74,9 @@ class ProgrammingProblemJpaEntity {
         this.topic = topic;
         this.difficulty = difficulty;
         this.allowedLanguages = allowedLanguages;
+        this.starterCodes = starterCodes;
         this.createdAt = createdAt;
+        this.deleted = deleted;
     }
 
     UUID getId() {
@@ -105,6 +114,8 @@ class ProgrammingProblemJpaEntity {
     ProblemDifficulty getDifficulty() { return difficulty; }
 
     String getAllowedLanguages() { return allowedLanguages; }
+
+    String getStarterCodes() { return starterCodes; }
 
     Instant getCreatedAt() {
         return createdAt;

@@ -2,6 +2,7 @@ package com.devedu.learningplatform.infrastructure.persistence.user;
 
 import com.devedu.learningplatform.application.port.out.UserRepository;
 import com.devedu.learningplatform.application.exception.EmailAlreadyExistsException;
+import com.devedu.learningplatform.application.exception.UserDeletionConflictException;
 import com.devedu.learningplatform.domain.model.User;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
@@ -53,6 +54,16 @@ public class UserRepositoryAdapter implements UserRepository {
             return toDomain(repository.saveAndFlush(entity));
         } catch (DataIntegrityViolationException exception) {
             throw new EmailAlreadyExistsException();
+        }
+    }
+
+    @Override
+    public void deleteById(UUID id) {
+        try {
+            repository.deleteById(id);
+            repository.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw new UserDeletionConflictException();
         }
     }
 

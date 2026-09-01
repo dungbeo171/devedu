@@ -1,14 +1,16 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { createProgrammingProblem } from '../api/programmingProblemsApi'
+import { createProgrammingProblem, updateProgrammingProblem } from '../api/programmingProblemsApi'
 import {
   topicLabels,
   type CreateProblemTestCase,
   type ProblemDifficulty,
   type ProblemTopic,
   type ProgrammingProblemDetail,
+  type ManagedProgrammingProblem,
   type SubmissionLanguage,
 } from '../types/programmingProblem'
 import { IconCode } from '../../../shared/components/Icons'
+import { createStarterCode } from '../starterCode'
 
 const topics = Object.entries(topicLabels) as [ProblemTopic, string][]
 const languageOptions: { value: SubmissionLanguage; label: string }[] = [
@@ -20,31 +22,59 @@ const languageOptions: { value: SubmissionLanguage; label: string }[] = [
 ]
 const emptyTestCase = (): CreateProblemTestCase => ({ input: '', expectedOutput: '', timeLimitMillis: 1000 })
 
-export function ProblemCreator({ onCreated }: { onCreated: (problem: ProgrammingProblemDetail) => void }) {
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [slug, setSlug] = useState('')
-  const [slugEdited, setSlugEdited] = useState(false)
-  const [summary, setSummary] = useState('')
-  const [description, setDescription] = useState('')
-  const [sampleInput, setSampleInput] = useState('')
-  const [sampleOutput, setSampleOutput] = useState('')
-  const [topic, setTopic] = useState<ProblemTopic>('INTRODUCTION')
-  const [difficulty, setDifficulty] = useState<ProblemDifficulty>('EASY')
-  const [allowedLanguages, setAllowedLanguages] = useState<SubmissionLanguage[]>(['CPP'])
-  const [testCases, setTestCases] = useState<CreateProblemTestCase[]>([emptyTestCase()])
+export function ProblemCreator({ onCreated, standalone = false, onCancel, initialProblem }: {
+  onCreated: (problem: ProgrammingProblemDetail) => void
+  standalone?: boolean
+  onCancel?: () => void
+  initialProblem?: ManagedProgrammingProblem
+}) {
+  const [open, setOpen] = useState(standalone)
+  const [title, setTitle] = useState(initialProblem?.title ?? '')
+  const [slug, setSlug] = useState(initialProblem?.slug ?? '')
+  const [slugEdited, setSlugEdited] = useState(Boolean(initialProblem))
+  const [summary, setSummary] = useState(initialProblem?.summary ?? '')
+  const [description, setDescription] = useState(initialProblem?.description ?? '')
+  const [sampleInput, setSampleInput] = useState(initialProblem?.sampleInput ?? '')
+  const [sampleOutput, setSampleOutput] = useState(initialProblem?.sampleOutput ?? '')
+  const [topic, setTopic] = useState<ProblemTopic>(initialProblem?.topic ?? 'INTRODUCTION')
+  const [difficulty, setDifficulty] = useState<ProblemDifficulty>(initialProblem?.difficulty ?? 'EASY')
+  const [allowedLanguages, setAllowedLanguages] = useState<SubmissionLanguage[]>(
+    initialProblem ? [...initialProblem.allowedLanguages] : ['CPP'],
+  )
+  const [starterCodes, setStarterCodes] = useState<Partial<Record<SubmissionLanguage, string>>>(() => ({
+    ...(initialProblem?.starterCodes ?? { CPP: createStarterCode('CPP', '') }),
+  }))
+  const [editedStarterLanguages, setEditedStarterLanguages] = useState<SubmissionLanguage[]>(
+    initialProblem ? [...initialProblem.allowedLanguages] : [],
+  )
+  const [testCases, setTestCases] = useState<CreateProblemTestCase[]>(
+    initialProblem ? initialProblem.testCases.map((testCase) => ({ ...testCase })) : [emptyTestCase()],
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   function changeTitle(value: string) {
     setTitle(value)
     if (!slugEdited) setSlug(toSlug(value))
+    setStarterCodes((current) => Object.fromEntries(
+      allowedLanguages.map((language) => [
+        language,
+        editedStarterLanguages.includes(language)
+          ? current[language] ?? ''
+          : createStarterCode(language, value),
+      ]),
+    ))
   }
 
   function toggleLanguage(language: SubmissionLanguage) {
-    setAllowedLanguages((current) => current.includes(language)
-      ? current.filter((item) => item !== language)
-      : [...current, language])
+    setAllowedLanguages((current) => {
+      if (current.includes(language)) return current.filter((item) => item !== language)
+      setStarterCodes((codes) => ({
+        ...codes,
+        [language]: codes[language] ?? createStarterCode(language, title),
+      }))
+      return [...current, language]
+    })
   }
 
   function updateTestCase(index: number, changes: Partial<CreateProblemTestCase>) {
@@ -61,15 +91,20 @@ export function ProblemCreator({ onCreated }: { onCreated: (problem: Programming
     }
     setSubmitting(true)
     try {
-      const created = await createProgrammingProblem({
+      const request = {
         slug, title, summary, description, sampleInput, sampleOutput,
-        topic, difficulty, allowedLanguages, testCases,
-      })
-      resetForm()
-      setOpen(false)
+        topic, difficulty, allowedLanguages,
+        starterCodes: Object.fromEntries(allowedLanguages.map((language) => [language, starterCodes[language] ?? ''])),
+        testCases,
+      }
+      const created = initialProblem
+        ? await updateProgrammingProblem(initialProblem.slug, request)
+        : await createProgrammingProblem(request)
+      if (!initialProblem) resetForm()
+      if (!standalone) setOpen(false)
       onCreated(created)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Không thể thêm bài tập.')
+      setError(reason instanceof Error ? reason.message : `Không thể ${initialProblem ? 'sửa' : 'thêm'} bài tập.`)
     } finally {
       setSubmitting(false)
     }
@@ -86,25 +121,29 @@ export function ProblemCreator({ onCreated }: { onCreated: (problem: Programming
     setTopic('INTRODUCTION')
     setDifficulty('EASY')
     setAllowedLanguages(['CPP'])
+    setStarterCodes({ CPP: createStarterCode('CPP', '') })
+    setEditedStarterLanguages([])
     setTestCases([emptyTestCase()])
     setError('')
   }
 
   return (
     <div className="mt-5">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
-      >
-        <IconCode className="h-4 w-4" />
-        <span>{open ? 'Đóng form' : 'Thêm bài tập'}</span>
-      </button>
+      {!standalone ? (
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
+        >
+          <IconCode className="h-4 w-4" />
+          <span>{open ? 'Đóng form' : 'Thêm bài tập'}</span>
+        </button>
+      ) : null}
 
       {open ? (
-        <form onSubmit={(event) => void submit(event)} className="mt-4 rounded-3xl border border-blue-100 bg-white p-5 shadow-md shadow-blue-900/10 sm:p-6">
+        <form onSubmit={(event) => void submit(event)} className={`${standalone ? '' : 'mt-4'} rounded-3xl border border-blue-100 bg-white p-5 shadow-md shadow-blue-900/10 sm:p-6`}>
           <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-black text-slate-900">Tạo bài tập lập trình</h3>
+            <h3 className="text-lg font-black text-slate-900">{initialProblem ? 'Sửa bài tập lập trình' : 'Tạo bài tập lập trình'}</h3>
             <p className="text-xs text-slate-600">Test case bên dưới được giữ kín và chỉ dùng khi chấm bài.</p>
           </div>
 
@@ -153,6 +192,32 @@ export function ProblemCreator({ onCreated }: { onCreated: (problem: Programming
             </div>
           </fieldset>
 
+          <fieldset className="mt-5">
+            <legend className="text-xs font-bold text-slate-700">Code có sẵn theo ngôn ngữ</legend>
+            <p className="mt-1 text-xs text-slate-500">Mỗi bài có template riêng. Người học vẫn có thể sửa hoặc xóa toàn bộ code này.</p>
+            <div className="mt-3 space-y-3">
+              {allowedLanguages.map((language) => {
+                const option = languageOptions.find((item) => item.value === language)
+                return (
+                  <Field key={language} label={option?.label ?? language}>
+                    <textarea
+                      required
+                      maxLength={100000}
+                      rows={10}
+                      spellCheck={false}
+                      value={starterCodes[language] ?? ''}
+                      onChange={(event) => {
+                        setStarterCodes((current) => ({ ...current, [language]: event.target.value }))
+                        setEditedStarterLanguages((current) => current.includes(language) ? current : [...current, language])
+                      }}
+                      className={`${inputClass} font-mono`}
+                    />
+                  </Field>
+                )
+              })}
+            </div>
+          </fieldset>
+
           <div className="mt-6 flex items-center justify-between gap-3">
             <h4 className="text-sm font-black text-slate-900">Test case ẩn</h4>
             <button type="button" onClick={() => setTestCases((current) => [...current, emptyTestCase()])} disabled={testCases.length >= 50} className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
@@ -183,9 +248,9 @@ export function ProblemCreator({ onCreated }: { onCreated: (problem: Programming
 
           {error ? <p role="alert" className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-bold text-blue-800">{error}</p> : null}
           <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-blue-100 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-blue-50">Hủy</button>
+            <button type="button" onClick={() => onCancel ? onCancel() : setOpen(false)} className="rounded-xl border border-blue-100 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-blue-50">Hủy</button>
             <button type="submit" disabled={submitting} className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">
-              {submitting ? 'Đang lưu...' : 'Lưu bài tập'}
+              {submitting ? 'Đang lưu...' : initialProblem ? 'Lưu thay đổi' : 'Lưu bài tập'}
             </button>
           </div>
         </form>

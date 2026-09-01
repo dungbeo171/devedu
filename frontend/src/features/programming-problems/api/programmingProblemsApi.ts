@@ -8,6 +8,8 @@ import type {
   ProgrammingProblemSummary,
   SubmissionLanguage,
   CreateProgrammingProblem,
+  ProblemTestRun,
+  ManagedProgrammingProblem,
 } from '../types/programmingProblem'
 import { getStoredAccessToken } from '../../auth/api/authApi'
 
@@ -30,6 +32,31 @@ export async function runProgrammingProblemCode(
     throw new Error(body?.message ?? 'Không thể chạy thử code lúc này.')
   }
   return response.json() as Promise<ProblemCodeExecution>
+}
+
+export async function runProgrammingProblemTests(
+  slug: string,
+  language: SubmissionLanguage,
+  sourceCode: string,
+): Promise<ProblemTestRun> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('AUTHENTICATION_REQUIRED')
+
+  const response = await fetch(`/api/problems/${encodeURIComponent(slug)}/runs`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ language, sourceCode }),
+  })
+  if (response.status === 401) throw new Error('AUTHENTICATION_REQUIRED')
+  if (response.status === 403) throw new Error('STUDENT_ROLE_REQUIRED')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể chạy test case lúc này.')
+  }
+  return response.json() as Promise<ProblemTestRun>
 }
 
 export async function getProgrammingProblems(
@@ -77,6 +104,59 @@ export async function createProgrammingProblem(
     throw new Error(body?.message ?? 'Không thể thêm bài tập.')
   }
   return response.json() as Promise<ProgrammingProblemDetail>
+}
+
+export async function getManagedProgrammingProblem(slug: string): Promise<ManagedProgrammingProblem> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  const response = await fetch(`/api/admin/problems/${encodeURIComponent(slug)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (response.status === 401) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  if (response.status === 403) throw new Error('Chỉ quản trị viên được sửa bài tập.')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể tải dữ liệu bài tập.')
+  }
+  return response.json() as Promise<ManagedProgrammingProblem>
+}
+
+export async function updateProgrammingProblem(
+  currentSlug: string,
+  request: CreateProgrammingProblem,
+): Promise<ProgrammingProblemDetail> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  const response = await fetch(`/api/admin/problems/${encodeURIComponent(currentSlug)}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 401) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  if (response.status === 403) throw new Error('Chỉ quản trị viên được sửa bài tập.')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể sửa bài tập.')
+  }
+  return response.json() as Promise<ProgrammingProblemDetail>
+}
+
+export async function deleteProgrammingProblem(slug: string): Promise<void> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  const response = await fetch(`/api/admin/problems/${encodeURIComponent(slug)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (response.status === 401) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  if (response.status === 403) throw new Error('Chỉ quản trị viên được xóa bài tập.')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Không thể xóa bài tập.')
+  }
 }
 
 export async function getSolvedProgrammingProblemIds(): Promise<string[]> {

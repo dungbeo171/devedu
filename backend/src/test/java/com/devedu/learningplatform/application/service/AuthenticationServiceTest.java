@@ -162,6 +162,11 @@ class AuthenticationServiceTest {
             users.put(user.email(), user);
             return user;
         }
+
+        @Override
+        public void deleteById(UUID id) {
+            users.values().removeIf(user -> user.id().equals(id));
+        }
     }
 
     private static final class TestPasswordHasher implements PasswordHasher {

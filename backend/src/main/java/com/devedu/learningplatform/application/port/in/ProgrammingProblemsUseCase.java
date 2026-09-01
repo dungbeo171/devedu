@@ -4,6 +4,8 @@ public interface ProgrammingProblemsUseCase extends
         ListProgrammingProblemsUseCase,
         GetProgrammingProblemUseCase,
         CreateProgrammingProblemUseCase,
+        ManageProgrammingProblemsUseCase,
+        RunProblemTestsUseCase,
         SubmitProgrammingProblemUseCase,
         ListSolvedProgrammingProblemsUseCase,
         GetProblemDraftUseCase,

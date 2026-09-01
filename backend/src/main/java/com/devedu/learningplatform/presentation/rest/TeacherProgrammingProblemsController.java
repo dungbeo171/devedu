@@ -34,6 +34,7 @@ public class TeacherProgrammingProblemsController {
                 request.topic(),
                 request.difficulty(),
                 request.allowedLanguages(),
+                request.starterCodes(),
                 request.testCases() == null ? null : request.testCases().stream()
                         .map(testCase -> new CreateProblemTestCaseCommand(
                                 testCase.input(), testCase.expectedOutput(), testCase.timeLimitMillis()))
@@ -42,7 +43,7 @@ public class TeacherProgrammingProblemsController {
         return ResponseEntity.status(HttpStatus.CREATED).body(new ProgrammingProblemDetailResponse(
                 problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
                 problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
-                problem.allowedLanguages(), problem.createdAt()
+                problem.allowedLanguages(), problem.starterCodes(), problem.createdAt()
         ));
     }
 }

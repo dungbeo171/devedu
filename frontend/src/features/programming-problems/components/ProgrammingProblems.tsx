@@ -1,7 +1,6 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { getProgrammingProblems, getSolvedProgrammingProblemIds } from '../api/programmingProblemsApi'
+import { deleteProgrammingProblem, getProgrammingProblems, getSolvedProgrammingProblemIds } from '../api/programmingProblemsApi'
 import { ProblemWorkspace } from './ProblemWorkspace'
-import { ProblemCreator } from './ProblemCreator'
 import { getStoredUser } from '../../auth/api/authApi'
 import {
   topicLabels,
@@ -38,9 +37,25 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [flashMessage, setFlashMessage] = useState('')
-  const [refreshKey, setRefreshKey] = useState(0)
   const [page, setPage] = useState(1)
   const currentUser = getStoredUser()
+
+  async function deleteProblem(problem: ProgrammingProblemSummary) {
+    if (!window.confirm(`Xóa bài tập “${problem.title}”? Hành động này không thể hoàn tác.`)) return
+    setError('')
+    try {
+      await deleteProgrammingProblem(problem.slug)
+      setProblems((current) => current.filter((item) => item.id !== problem.id))
+      setSolvedProblemIds((current) => {
+        const next = new Set(current)
+        next.delete(problem.id)
+        return next
+      })
+      setFlashMessage(`Đã xóa bài tập “${problem.title}”`)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Không thể xóa bài tập.')
+    }
+  }
 
   useEffect(() => {
     let ignore = false
@@ -57,7 +72,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
-  }, [selectedTopic, difficulty, language, refreshKey])
+  }, [selectedTopic, difficulty, language])
 
   useEffect(() => {
     if (currentUser?.role !== 'STUDENT') {
@@ -132,10 +147,10 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       </div>
 
       {currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN' ? (
-        <ProblemCreator onCreated={(problem) => {
-          setRefreshKey((current) => current + 1)
-          setFlashMessage(`Đã thêm bài tập “${problem.title}”`)
-        }} />
+        <a href="/problems/add" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
+          <IconCode className="h-4 w-4" />
+          <span>Thêm bài tập</span>
+        </a>
       ) : null}
 
       {/* Filter Toolbar Card */}
@@ -195,7 +210,14 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       ) : null}
       {!error && !loading ? (
         <>
-          <ProblemList problems={pageProblems} solvedProblemIds={solvedProblemIds} onSelect={openProblem} startIndex={pageStart} />
+          <ProblemList
+            problems={pageProblems}
+            solvedProblemIds={solvedProblemIds}
+            onSelect={openProblem}
+            onDelete={(problem) => void deleteProblem(problem)}
+            startIndex={pageStart}
+            admin={currentUser?.role === 'ADMIN'}
+          />
           {visibleProblems.length > problemsPerPage ? (
             <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
           ) : null}
@@ -260,63 +282,68 @@ function returnToProblemList() {
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
-function ProblemList({ problems, solvedProblemIds, onSelect, startIndex }: {
+function ProblemList({ problems, solvedProblemIds, onSelect, onDelete, startIndex, admin }: {
   problems: ProgrammingProblemSummary[]
   solvedProblemIds: Set<string>
   onSelect: (slug: string) => void
+  onDelete: (problem: ProgrammingProblemSummary) => void
   startIndex: number
+  admin: boolean
 }) {
   return (
     <div className="mt-5 space-y-3">
       {problems.map((problem, index) => {
         const solved = solvedProblemIds.has(problem.id)
         return (
-          <button
+          <div
             key={problem.id}
-            type="button"
-            onClick={() => onSelect(problem.slug)}
-            className="group flex w-full items-start gap-4 rounded-2xl border border-blue-100 bg-white p-5 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-500/10 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            className="group flex w-full items-stretch rounded-2xl border border-blue-100 bg-white shadow-sm transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-500/10"
           >
-            {/* Solved Status Indicator */}
-            <span
-              className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-xs font-black transition-all ${
-                solved
-                  ? 'border-emerald-500/50 bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/20'
-                  : 'border-blue-100 bg-blue-50 text-transparent group-hover:border-blue-300 group-hover:text-blue-600'
-              }`}
-              aria-label={solved ? 'Đã hoàn thành' : 'Chưa hoàn thành'}
+            <button
+              type="button"
+              onClick={() => onSelect(problem.slug)}
+              className="flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-2xl p-5 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/30"
             >
-              <IconCheck className="h-4 w-4" />
-            </span>
+              <span
+                className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-xs font-black transition-all ${
+                  solved
+                    ? 'border-emerald-500/50 bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/20'
+                    : 'border-blue-100 bg-blue-50 text-transparent group-hover:border-blue-300 group-hover:text-blue-600'
+                }`}
+                aria-label={solved ? 'Đã hoàn thành' : 'Chưa hoàn thành'}
+              >
+                <IconCheck className="h-4 w-4" />
+              </span>
 
-            {/* Problem Details */}
-            <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-blue-400">
-                  {topicLabels[problem.topic]}
-                </span>
-                <span className={`rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${difficultyClass(problem.difficulty)}`}>
-                  {difficultyLabels[problem.difficulty]}
-                </span>
-                {problem.allowedLanguages.map((item) => (
-                  <span key={item} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
-                    {languageLabels[item]}
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-blue-600">
+                    {topicLabels[problem.topic]}
                   </span>
-                ))}
+                  <span className={`rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${difficultyClass(problem.difficulty)}`}>
+                    {difficultyLabels[problem.difficulty]}
+                  </span>
+                  {problem.allowedLanguages.map((item) => (
+                    <span key={item} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
+                      {languageLabels[item]}
+                    </span>
+                  ))}
+                </span>
+                <span className="mt-2.5 block text-base font-bold text-slate-900 transition-colors group-hover:text-blue-700">{problem.title}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-600 line-clamp-2">{problem.summary}</span>
               </span>
-              <span className="mt-2.5 block text-base font-bold text-slate-900 transition-colors group-hover:text-blue-700">
-                {problem.title}
-              </span>
-              <span className="mt-1 block text-xs leading-5 text-slate-600 line-clamp-2">
-                {problem.summary}
-              </span>
-            </span>
 
-            {/* Problem Index */}
-            <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-600 group-hover:border-blue-300 group-hover:text-blue-700">
-              #{String(startIndex + index + 1).padStart(2, '0')}
-            </span>
-          </button>
+              <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-600 group-hover:border-blue-300 group-hover:text-blue-700">
+                #{String(startIndex + index + 1).padStart(2, '0')}
+              </span>
+            </button>
+            {admin ? (
+              <div className="flex shrink-0 flex-col justify-center gap-2 border-l border-blue-100 px-3">
+                <a href={`/problems/${encodeURIComponent(problem.slug)}/edit`} className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-center text-[11px] font-bold text-white transition hover:bg-blue-700">Sửa</a>
+                <button type="button" onClick={() => onDelete(problem)} className="cursor-pointer rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 transition hover:bg-red-50">Xóa</button>
+              </div>
+            ) : null}
+          </div>
         )
       })}
     </div>

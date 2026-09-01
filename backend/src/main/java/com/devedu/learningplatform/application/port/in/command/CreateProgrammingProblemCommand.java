@@ -5,6 +5,7 @@ import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public record CreateProgrammingProblemCommand(
@@ -17,6 +18,7 @@ public record CreateProgrammingProblemCommand(
         ProblemTopic topic,
         ProblemDifficulty difficulty,
         Set<CodeLanguage> allowedLanguages,
+        Map<CodeLanguage, String> starterCodes,
         List<CreateProblemTestCaseCommand> testCases
 ) {
 }

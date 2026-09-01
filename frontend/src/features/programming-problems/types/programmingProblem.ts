@@ -25,6 +25,7 @@ export interface ProgrammingProblemDetail extends ProgrammingProblemSummary {
   description: string
   sampleInput: string
   sampleOutput: string
+  starterCodes: Partial<Record<SubmissionLanguage, string>>
   createdAt: string
 }
 
@@ -32,6 +33,21 @@ export interface ProblemCodeExecution {
   language: SubmissionLanguage
   status: 'SUCCESS' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
   output: string
+}
+
+export interface ProblemTestCaseRunResult {
+  position: number
+  passed: boolean
+  status: 'ACCEPTED' | 'WRONG_ANSWER' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
+}
+
+export interface ProblemTestRun {
+  status: ProblemTestCaseRunResult['status']
+  diagnostic: string
+  passedTests: number
+  totalTests: number
+  executionTimeMillis: number
+  testCases: ProblemTestCaseRunResult[]
 }
 
 export interface ProblemSubmission {
@@ -70,6 +86,11 @@ export interface CreateProgrammingProblem {
   topic: ProblemTopic
   difficulty: ProblemDifficulty
   allowedLanguages: SubmissionLanguage[]
+  starterCodes: Partial<Record<SubmissionLanguage, string>>
+  testCases: CreateProblemTestCase[]
+}
+
+export interface ManagedProgrammingProblem extends ProgrammingProblemDetail {
   testCases: CreateProblemTestCase[]
 }
 

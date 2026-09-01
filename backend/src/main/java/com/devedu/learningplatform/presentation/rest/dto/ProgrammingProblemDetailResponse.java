@@ -5,6 +5,7 @@ import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 
@@ -19,6 +20,7 @@ public record ProgrammingProblemDetailResponse(
         ProblemTopic topic,
         ProblemDifficulty difficulty,
         Set<CodeLanguage> allowedLanguages,
+        Map<CodeLanguage, String> starterCodes,
         Instant createdAt
 ) {
 }

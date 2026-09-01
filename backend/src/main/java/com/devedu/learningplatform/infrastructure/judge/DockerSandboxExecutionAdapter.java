@@ -5,6 +5,7 @@ import com.devedu.learningplatform.application.port.in.command.ExecuteCodeComman
 import com.devedu.learningplatform.application.port.in.command.JudgeSubmissionCommand;
 import com.devedu.learningplatform.application.port.in.result.CodeExecutionResult;
 import com.devedu.learningplatform.application.port.in.result.JudgeResult;
+import com.devedu.learningplatform.application.port.in.result.JudgeTestCaseResult;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
 import com.devedu.learningplatform.application.port.out.SandboxExecutionPort;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
@@ -119,28 +120,56 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
             if (runner.compileScript() != null) {
                 var compilation = runContainer(command.submissionId(), "compile", runner.image(), runner.user(),
                         sourceDirectory, buildDirectory, true, runner.compileScript(), "", settings.compileTimeoutMillis());
-                if (compilation.timedOut()) return result(SubmissionStatus.COMPILE_ERROR, "Compilation timed out", 0, command.testCases().size(), started);
+                if (compilation.timedOut()) return compilationFailure(command, "Compilation timed out", started);
                 ensureInfrastructureAvailable(compilation);
-                if (compilation.exitCode() != 0) return result(SubmissionStatus.COMPILE_ERROR, diagnostic(compilation, "Compilation failed"), 0, command.testCases().size(), started);
+                if (compilation.exitCode() != 0) return compilationFailure(
+                        command, diagnostic(compilation, "Compilation failed"), started);
             }
 
             var passed = 0;
+            var testResults = new ArrayList<JudgeTestCaseResult>();
+            var overallStatus = SubmissionStatus.ACCEPTED;
+            var overallDiagnostic = "All test cases passed";
             for (var testCase : command.testCases()) {
                 var timeout = testCase.timeLimitMillis() + (command.language() == CodeLanguage.MYSQL
                         ? settings.mysqlStartupGraceMillis() : settings.startupGraceMillis());
                 var execution = runContainer(command.submissionId(), "test-" + testCase.position(), runner.image(),
                         runner.user(), sourceDirectory, buildDirectory, false, runner.runScript(), testCase.input(), timeout);
-                if (execution.timedOut()) return result(SubmissionStatus.TIME_LIMIT, "Time limit exceeded on test " + testCase.position(), passed, command.testCases().size(), started);
-                ensureInfrastructureAvailable(execution);
-                if (execution.outputExceeded()) return result(SubmissionStatus.RUNTIME_ERROR, "Output limit exceeded on test " + testCase.position(), passed, command.testCases().size(), started);
-                if (execution.exitCode() == COMPILE_ERROR_EXIT_CODE) return result(SubmissionStatus.COMPILE_ERROR, diagnostic(execution, "Compilation failed"), passed, command.testCases().size(), started);
-                if (execution.exitCode() != 0) return result(SubmissionStatus.RUNTIME_ERROR, diagnostic(execution, "Runtime error on test " + testCase.position()), passed, command.testCases().size(), started);
-                if (!normalize(execution.stdout()).equals(normalize(testCase.expectedOutput()))) {
-                    return result(SubmissionStatus.WRONG_ANSWER, "Wrong answer on test " + testCase.position(), passed, command.testCases().size(), started);
+                SubmissionStatus testStatus;
+                String testDiagnostic;
+                if (execution.timedOut()) {
+                    testStatus = SubmissionStatus.TIME_LIMIT;
+                    testDiagnostic = "Time limit exceeded on test " + testCase.position();
+                } else {
+                    ensureInfrastructureAvailable(execution);
+                    if (execution.outputExceeded()) {
+                        testStatus = SubmissionStatus.RUNTIME_ERROR;
+                        testDiagnostic = "Output limit exceeded on test " + testCase.position();
+                    } else if (execution.exitCode() == COMPILE_ERROR_EXIT_CODE) {
+                        testStatus = SubmissionStatus.COMPILE_ERROR;
+                        testDiagnostic = diagnostic(execution, "Compilation failed");
+                    } else if (execution.exitCode() != 0) {
+                        testStatus = SubmissionStatus.RUNTIME_ERROR;
+                        testDiagnostic = diagnostic(execution, "Runtime error on test " + testCase.position());
+                    } else if (!normalize(execution.stdout()).equals(normalize(testCase.expectedOutput()))) {
+                        testStatus = SubmissionStatus.WRONG_ANSWER;
+                        testDiagnostic = "Wrong answer on test " + testCase.position();
+                    } else {
+                        testStatus = SubmissionStatus.ACCEPTED;
+                        testDiagnostic = "Test " + testCase.position() + " passed";
+                    }
                 }
-                passed++;
+
+                var testPassed = testStatus == SubmissionStatus.ACCEPTED;
+                testResults.add(new JudgeTestCaseResult(testCase.position(), testPassed, testStatus));
+                if (testPassed) {
+                    passed++;
+                } else if (overallStatus == SubmissionStatus.ACCEPTED) {
+                    overallStatus = testStatus;
+                    overallDiagnostic = testDiagnostic;
+                }
             }
-            return result(SubmissionStatus.ACCEPTED, "All test cases passed", passed, command.testCases().size(), started);
+            return result(overallStatus, overallDiagnostic, passed, command.testCases().size(), started, testResults);
         } catch (IOException exception) {
             throw new JudgeUnavailableException("Code judge is unavailable", exception);
         } finally {
@@ -279,8 +308,18 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
         }
     }
 
-    private JudgeResult result(SubmissionStatus status, String diagnostic, int passed, int total, Instant started) {
-        return new JudgeResult(status, diagnostic, passed, total, Duration.between(started, Instant.now()).toMillis());
+    private JudgeResult compilationFailure(JudgeSubmissionCommand command, String diagnostic, Instant started) {
+        var testResults = command.testCases().stream()
+                .map(testCase -> new JudgeTestCaseResult(
+                        testCase.position(), false, SubmissionStatus.COMPILE_ERROR))
+                .toList();
+        return result(SubmissionStatus.COMPILE_ERROR, diagnostic, 0, command.testCases().size(), started, testResults);
+    }
+
+    private JudgeResult result(SubmissionStatus status, String diagnostic, int passed, int total, Instant started,
+                               List<JudgeTestCaseResult> testCases) {
+        return new JudgeResult(status, diagnostic, passed, total,
+                Duration.between(started, Instant.now()).toMillis(), testCases);
     }
 
     private CodeExecutionResult codeResult(CodeLanguage language, CodeExecutionResult.Status status, String output) {
