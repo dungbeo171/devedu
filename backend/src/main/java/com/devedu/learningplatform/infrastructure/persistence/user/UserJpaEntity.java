@@ -18,6 +18,9 @@ class UserJpaEntity {
     @Id
     private UUID id;
 
+    @Column(name = "public_id", nullable = false, updatable = false)
+    private long publicId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -37,8 +40,9 @@ class UserJpaEntity {
     protected UserJpaEntity() {
     }
 
-    UserJpaEntity(UUID id, String name, String email, String passwordHash, UserRole role, Instant createdAt) {
+    UserJpaEntity(UUID id, long publicId, String name, String email, String passwordHash, UserRole role, Instant createdAt) {
         this.id = id;
+        this.publicId = publicId;
         this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;
@@ -49,6 +53,8 @@ class UserJpaEntity {
     UUID getId() {
         return id;
     }
+
+    long getPublicId() { return publicId; }
 
     String getName() {
         return name;

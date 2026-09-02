@@ -50,7 +50,7 @@ class AdminUserManagementServiceTest {
         var student = saveUser("Student", "student@devedu.local", UserRole.STUDENT);
 
         var updated = service.updateRole(new UpdateUserRoleCommand(
-                admin.id(), admin.role(), student.id(), UserRole.TEACHER
+                admin.id(), admin.role(), student.publicId(), UserRole.TEACHER
         ));
 
         assertThat(updated.role()).isEqualTo(UserRole.TEACHER);
@@ -70,7 +70,7 @@ class AdminUserManagementServiceTest {
         var admin = saveUser("Admin", "admin@devedu.local", UserRole.ADMIN);
 
         assertThatThrownBy(() -> service.updateRole(new UpdateUserRoleCommand(
-                admin.id(), admin.role(), admin.id(), UserRole.STUDENT
+                admin.id(), admin.role(), admin.publicId(), UserRole.STUDENT
         ))).isInstanceOf(UserManagementForbiddenException.class);
     }
 
@@ -79,7 +79,7 @@ class AdminUserManagementServiceTest {
         var admin = saveUser("Admin", "admin@devedu.local", UserRole.ADMIN);
 
         assertThatThrownBy(() -> service.updateRole(new UpdateUserRoleCommand(
-                admin.id(), admin.role(), UUID.randomUUID(), UserRole.TEACHER
+                admin.id(), admin.role(), 999, UserRole.TEACHER
         ))).isInstanceOf(UserNotFoundException.class);
     }
 
@@ -95,12 +95,24 @@ class AdminUserManagementServiceTest {
         @Override public Optional<User> findById(UUID id) {
             return users.values().stream().filter(user -> user.id().equals(id)).findFirst();
         }
+        @Override public Optional<User> findByPublicId(long publicId) {
+            return users.values().stream().filter(user -> user.publicId() == publicId).findFirst();
+        }
+        @Override public Optional<User> findByStudentCode(String studentCode) {
+            return users.values().stream().filter(user -> studentCode.equals(user.studentCode())).findFirst();
+        }
         @Override public List<User> findAll() {
             var result = new ArrayList<>(users.values());
             result.sort(Comparator.comparing(User::createdAt).reversed());
             return result;
         }
-        @Override public User save(User user) { users.put(user.email(), user); return user; }
+        @Override public User save(User user) {
+            var saved = user.publicId() > 0 ? user : new User(
+                    user.id(), users.size() + 1L, user.studentCode(), user.teacherCode(), user.name(),
+                    user.email(), user.passwordHash(), user.role(), user.createdAt());
+            users.put(saved.email(), saved);
+            return saved;
+        }
         @Override public void deleteById(UUID id) {
             users.values().removeIf(user -> user.id().equals(id));
         }

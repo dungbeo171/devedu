@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -43,7 +42,7 @@ public class AdminUsersController {
 
     @PatchMapping("/{userId}/role")
     public UserResponse updateRole(
-            @PathVariable UUID userId,
+            @PathVariable long userId,
             @RequestBody UpdateUserRoleRequest request,
             @AuthenticationPrincipal AuthenticatedUser actor
     ) {
@@ -65,7 +64,7 @@ public class AdminUsersController {
 
     @PutMapping("/{userId}")
     public UserResponse updateUser(
-            @PathVariable UUID userId,
+            @PathVariable long userId,
             @RequestBody UpdateManagedUserRequest request,
             @AuthenticationPrincipal AuthenticatedUser actor
     ) {
@@ -76,7 +75,7 @@ public class AdminUsersController {
 
     @DeleteMapping("/{userId}")
     public ResponseEntity<Void> deleteUser(
-            @PathVariable UUID userId,
+            @PathVariable long userId,
             @AuthenticationPrincipal AuthenticatedUser actor
     ) {
         useCase.deleteUser(new DeleteManagedUserCommand(actor.id(), actor.role(), userId));

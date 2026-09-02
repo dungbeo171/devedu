@@ -35,7 +35,7 @@ interface RouteDefinition {
 const navigationRoutes: RouteDefinition[] = [
   { path: '/', label: 'Compiler', title: 'Trình biên dịch · DevEdu', content: <CodeCompiler />, icon: IconTerminal },
   { path: '/problems', label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems />, icon: IconCode },
-  { path: '/courses', label: 'Khóa học', title: 'Khóa học · DevEdu', content: <CourseLearning />, icon: IconBookOpen },
+  { path: '/courses', label: 'Lớp học', title: 'Lớp học · DevEdu', content: <CourseLearning />, icon: IconBookOpen },
   { path: '/exams', label: 'Kỳ thi', title: 'Kỳ thi · DevEdu', content: <ExamModule />, icon: IconTrophy },
   { path: '/interview', label: 'Interview', title: 'Interview · DevEdu', content: <InterviewModule />, icon: IconSparkles },
 ]
@@ -190,6 +190,11 @@ function SiteHeader({ pathname }: { pathname: string }) {
                       {user.role}
                     </span>
                   </div>
+                  <p className="mt-1.5 font-mono text-[10px] text-slate-500">
+                    {user.role === 'ADMIN'
+                      ? 'Quản trị viên'
+                      : `ID: ${user.publicId ?? '—'}${user.studentCode ? ` · ${user.studentCode}` : user.teacherCode ? ` · ${user.teacherCode}` : ''}`}
+                  </p>
                 </div>
                 <div className="my-1 h-px bg-blue-100" />
                 <button

@@ -7,6 +7,6 @@ import java.util.UUID;
 public record DeleteManagedUserCommand(
         UUID actorId,
         UserRole actorRole,
-        UUID userId
+        long userId
 ) {
 }

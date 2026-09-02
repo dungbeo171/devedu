@@ -16,9 +16,12 @@ export function OAuthCallbackPage() {
     const email = fragment.get('email')
     const role = fragment.get('role') as UserRole | null
     const expiresIn = Number(fragment.get('expires_in'))
+    const publicId = Number(fragment.get('public_id'))
+    const studentCode = fragment.get('student_code') || null
+    const teacherCode = fragment.get('teacher_code') || null
 
     window.history.replaceState({}, document.title, '/auth/callback')
-    if (query.has('oauth_error') || !token || !email || !role || !Number.isFinite(expiresIn)) {
+    if (query.has('oauth_error') || !token || !email || !role || !Number.isFinite(expiresIn) || !Number.isFinite(publicId)) {
       setMessage('Đăng nhập mạng xã hội thất bại hoặc bị hủy. Vui lòng thử lại.')
       setIsError(true)
       return
@@ -28,7 +31,8 @@ export function OAuthCallbackPage() {
       accessToken: token,
       tokenType: 'Bearer',
       expiresIn,
-      user: { id: '', name: name?.trim() || email.split('@')[0], email, role, createdAt: '' },
+      user: { id: publicId, publicId, studentCode, teacherCode,
+        name: name?.trim() || email.split('@')[0], email, role, createdAt: '' },
     } satisfies AuthenticationResponse)
     setPendingFlash('Đăng nhập thành công')
     window.location.replace('/')

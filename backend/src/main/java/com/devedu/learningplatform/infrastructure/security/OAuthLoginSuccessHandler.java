@@ -38,7 +38,10 @@ public class OAuthLoginSuccessHandler implements AuthenticationSuccessHandler {
                     + "&expires_in=" + result.accessToken().expiresInSeconds()
                     + "&name=" + encode(result.user().name())
                     + "&email=" + encode(result.user().email())
-                    + "&role=" + result.user().role().name();
+                    + "&role=" + result.user().role().name()
+                    + "&public_id=" + result.user().publicId()
+                    + "&student_code=" + encode(result.user().studentCode() == null ? "" : result.user().studentCode())
+                    + "&teacher_code=" + encode(result.user().teacherCode() == null ? "" : result.user().teacherCode());
             response.sendRedirect(settings.frontendCallbackUri() + "#" + fragment);
         } catch (RuntimeException exception) {
             invalidateSession(request);

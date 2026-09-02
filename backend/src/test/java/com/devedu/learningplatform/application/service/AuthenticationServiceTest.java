@@ -153,6 +153,16 @@ class AuthenticationServiceTest {
         }
 
         @Override
+        public Optional<User> findByPublicId(long publicId) {
+            return users.values().stream().filter(user -> user.publicId() == publicId).findFirst();
+        }
+
+        @Override
+        public Optional<User> findByStudentCode(String studentCode) {
+            return users.values().stream().filter(user -> studentCode.equals(user.studentCode())).findFirst();
+        }
+
+        @Override
         public List<User> findAll() {
             return List.copyOf(users.values());
         }

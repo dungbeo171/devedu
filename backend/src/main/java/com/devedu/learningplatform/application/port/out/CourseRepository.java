@@ -14,8 +14,11 @@ public interface CourseRepository {
 
     List<Course> findAll();
 
+    default List<Course> findByTeacherId(UUID teacherId) {
+        return findAll().stream().filter(course -> course.teacherId().equals(teacherId)).toList();
+    }
+
     Optional<Course> findById(UUID id);
 
     Optional<Course> findBySlug(String slug);
 }
-

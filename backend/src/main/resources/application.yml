@@ -11,6 +11,10 @@ spring:
     init:
       mode: always
       encoding: UTF-8
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
   jpa:
     open-in-view: false
     hibernate:
@@ -57,6 +61,9 @@ judge:
     startup-grace-ms: ${JUDGE_STARTUP_GRACE_MS:1000}
     mysql-startup-grace-ms: ${JUDGE_MYSQL_STARTUP_GRACE_MS:20000}
     max-concurrent-executions: ${JUDGE_MAX_CONCURRENT_EXECUTIONS:2}
+
+course:
+  material-storage-root: ${COURSE_MATERIAL_STORAGE_ROOT:${java.io.tmpdir}/devedu-course-materials}
 
 server:
   port: ${SERVER_PORT:8080}

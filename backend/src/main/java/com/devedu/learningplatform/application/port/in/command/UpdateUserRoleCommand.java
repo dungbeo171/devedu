@@ -7,7 +7,7 @@ import java.util.UUID;
 public record UpdateUserRoleCommand(
         UUID actorId,
         UserRole actorRole,
-        UUID userId,
+        long userId,
         UserRole role
 ) {
 }

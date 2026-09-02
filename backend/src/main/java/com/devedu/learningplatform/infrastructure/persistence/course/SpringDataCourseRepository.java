@@ -10,4 +10,5 @@ interface SpringDataCourseRepository extends JpaRepository<CourseJpaEntity, UUID
     boolean existsBySlug(String slug);
     Optional<CourseJpaEntity> findBySlug(String slug);
     List<CourseJpaEntity> findAllByOrderByTitleAsc();
+    List<CourseJpaEntity> findAllByTeacherIdOrderByTitleAsc(UUID teacherId);
 }

@@ -41,6 +41,7 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 
 - `User` và `UserRole` là domain model thuần Java.
 - `User.name` là tên hiển thị bắt buộc, tối đa 100 ký tự; tài khoản OAuth lấy tên provider và dữ liệu cũ dùng phần local của email làm giá trị migration.
+- UUID của user chỉ là khóa nội bộ cho JWT/foreign key và không được trả làm `id` công khai. API user trả `id`/`publicId` dạng số; dãy ID học viên/giáo viên tăng từ 1 và không bị tài khoản bootstrap admin chiếm số. Mã vai trò được suy ra từ ID này: `STUDENT` có `studentCode` dạng `SV000001`, `TEACHER` có `teacherCode` dạng `GV000001`. Không hiển thị UUID trên frontend.
 - Register/login được truy cập qua application input port; repository, password hasher và token provider là output port.
 - JPA adapter, BCrypt và JWT implementation nằm trong `infrastructure`.
 - REST request/response DTO và exception mapping nằm trong `presentation`.
@@ -109,13 +110,22 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 
 ### Course/Lesson
 
-- Domain gồm `Course`, `CourseTopic`, `Lesson` và `LessonProgress`; không phụ thuộc Spring/JPA/web.
+- Domain gồm `Course`, `CourseStatus`, `CourseTopic`, `Lesson`, `LessonProgress`, `CourseEnrollment` và `CourseMaterial`; không phụ thuộc Spring/JPA/web. Course lưu ngày bắt đầu, ngày kết thúc tùy chọn và xác định trạng thái `ACTIVE`/`ENDED` theo ngày hiện tại.
 - Quản lý nội dung đi qua `CourseLearningUseCase`; persistence đi qua output port và adapter trong `infrastructure/persistence/course`.
+- Workflow lớp và bài lập trình đi qua `CourseClassroomUseCase`. `CourseProblemAssignment` chỉ liên kết lớp với bài tập hiện có; không sao chép đề hoặc test case sang module Course.
 - Giáo viên chỉ được quản lý khóa học do chính mình tạo; `ADMIN` có thể quản lý mọi khóa học.
+- `GET /api/teacher/courses` trả danh sách lớp được quản lý cùng số sinh viên và trạng thái; không trả lớp của giáo viên khác cho `TEACHER`.
+- Quản lý thành viên lớp đi qua `CourseLearningUseCase`: roster trả email/ngày tham gia, tìm ứng viên theo tên/email/mã sinh viên, thêm nhiều và xóa nhiều. Mọi endpoint thành viên phải kiểm tra giáo viên sở hữu lớp hoặc role `ADMIN`; không trả UUID nội bộ của sinh viên.
+- Giáo viên/admin chỉ được sửa `displayName` của enrollment trong phạm vi lớp; không được dùng chức năng lớp để sửa tên, email hoặc thông tin tài khoản toàn cục của sinh viên.
 - Danh sách môn học, chi tiết khóa học và lesson là public. Đánh dấu lesson hoàn thành chỉ chấp nhận JWT role `STUDENT`.
 - Tiến độ hoàn thành là idempotent theo cặp student/lesson; không tạo bản ghi trùng khi gọi lại.
-- Video chỉ là URL HTTP/HTTPS được lưu cùng lesson. Không tự ý thêm upload, object storage, transcoding hoặc streaming infrastructure.
+- Giáo viên thêm sinh viên vào khóa học của mình bằng một mã sinh viên hoặc file TXT UTF-8 chứa tối đa 1000 mã; import phải kiểm tra toàn bộ mã trước khi lưu và enrollment idempotent theo cặp course/student.
+- Giáo viên sở hữu lớp/admin có thể gán hoặc gỡ bài lập trình. Sinh viên chỉ đọc được lớp đã enrollment; tiến trình bằng số bài được gán đã có submission `ACCEPTED` chia tổng số bài được gán (lớp chưa có bài trả 0%).
+- Tài liệu lớp chỉ nhận PDF, Word (`.doc`, `.docx`) hoặc PowerPoint (`.ppt`, `.pptx`), tối đa 20 MB. Metadata đi qua persistence port; byte file đi qua `CourseFileStorage` và local named volume `devedu_course_materials`. Tên file client không được dùng làm đường dẫn storage.
+- Chỉ giáo viên sở hữu khóa học/admin được upload và xem danh sách lớp. Chỉ sinh viên đã được enrollment, giáo viên sở hữu hoặc admin được list/download tài liệu; response file phải có content type chuẩn, `nosniff` và Content-Disposition an toàn.
+- Video vẫn chỉ là URL HTTP/HTTPS được lưu cùng lesson. Không tự ý thêm object storage, transcoding hoặc streaming infrastructure.
 - Frontend code của module nằm trong `src/features/course-learning`.
+- `/courses` là một trang “Lớp học” duy nhất. Giáo viên/admin quản lý tab Sinh viên và Bài tập; sinh viên chỉ thấy các lớp đã tham gia cùng tab Bài tập/Tiến trình và mở bài qua `/problems/{slug}`. Roster phân trang 10 người, dùng bảng desktop/card mobile, hỗ trợ tìm kiếm, chọn nhiều và confirmation trước khi xóa. Không khôi phục `TeacherCourseStudio` hoặc tạo route chi tiết lớp riêng.
 
 ### Exam
 

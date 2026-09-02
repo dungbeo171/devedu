@@ -4,11 +4,12 @@ import com.devedu.learningplatform.domain.model.UserRole;
 import com.devedu.learningplatform.domain.model.User;
 
 import java.time.Instant;
-import java.util.UUID;
 
-public record UserResponse(UUID id, String name, String email, UserRole role, Instant createdAt) {
+public record UserResponse(long id, long publicId, String studentCode, String teacherCode,
+                           String name, String email, UserRole role, Instant createdAt) {
 
     public static UserResponse from(User user) {
-        return new UserResponse(user.id(), user.name(), user.email(), user.role(), user.createdAt());
+        return new UserResponse(user.publicId(), user.publicId(), user.studentCode(), user.teacherCode(),
+                user.name(), user.email(), user.role(), user.createdAt());
     }
 }

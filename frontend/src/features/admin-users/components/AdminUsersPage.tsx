@@ -15,7 +15,7 @@ export function AdminUsersPage() {
   const currentUser = storedCurrentUser()
   const [users, setUsers] = useState<ManagedUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -114,7 +114,11 @@ export function AdminUsersPage() {
                               </span>
                             ) : null}
                           </div>
-                          <span className="font-mono text-[11px] text-slate-500">ID: {user.id.slice(0, 8)}...</span>
+                          <span className="font-mono text-[11px] text-slate-500">
+                            {user.role === 'ADMIN'
+                              ? 'Tài khoản quản trị'
+                              : `ID: ${user.publicId}${user.studentCode ? ` · ${user.studentCode}` : user.teacherCode ? ` · ${user.teacherCode}` : ''}`}
+                          </span>
                         </div>
                       </div>
                     </td>

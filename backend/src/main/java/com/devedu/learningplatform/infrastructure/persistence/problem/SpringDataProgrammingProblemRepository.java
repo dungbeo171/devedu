@@ -29,6 +29,7 @@ interface SpringDataProgrammingProblemRepository
     );
 
     Optional<ProgrammingProblemJpaEntity> findBySlugAndDeletedFalse(String slug);
+    Optional<ProgrammingProblemJpaEntity> findByIdAndDeletedFalse(UUID id);
 
     boolean existsBySlug(String slug);
 

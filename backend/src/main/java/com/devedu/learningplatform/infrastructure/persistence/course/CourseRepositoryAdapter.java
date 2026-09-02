@@ -25,7 +25,7 @@ public class CourseRepositoryAdapter implements CourseRepository {
         try {
             return toDomain(repository.saveAndFlush(new CourseJpaEntity(
                     course.id(), course.slug(), course.title(), course.description(),
-                    course.teacherId(), course.createdAt()
+                    course.teacherId(), course.startDate(), course.endDate(), course.createdAt()
             )));
         } catch (DataIntegrityViolationException exception) {
             throw new CourseSlugAlreadyExistsException(course.slug());
@@ -36,11 +36,15 @@ public class CourseRepositoryAdapter implements CourseRepository {
         return repository.findAllByOrderByTitleAsc().stream().map(this::toDomain).toList();
     }
 
+    @Override public List<Course> findByTeacherId(UUID teacherId) {
+        return repository.findAllByTeacherIdOrderByTitleAsc(teacherId).stream().map(this::toDomain).toList();
+    }
+
     @Override public Optional<Course> findById(UUID id) { return repository.findById(id).map(this::toDomain); }
     @Override public Optional<Course> findBySlug(String slug) { return repository.findBySlug(slug).map(this::toDomain); }
 
     private Course toDomain(CourseJpaEntity entity) {
         return new Course(entity.getId(), entity.getSlug(), entity.getTitle(), entity.getDescription(),
-                entity.getTeacherId(), entity.getCreatedAt());
+                entity.getTeacherId(), entity.getStartDate(), entity.getEndDate(), entity.getCreatedAt());
     }
 }

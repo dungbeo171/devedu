@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -27,18 +28,27 @@ class CourseJpaEntity {
     @Column(name = "teacher_id", nullable = false)
     private UUID teacherId;
 
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     protected CourseJpaEntity() {
     }
 
-    CourseJpaEntity(UUID id, String slug, String title, String description, UUID teacherId, Instant createdAt) {
+    CourseJpaEntity(UUID id, String slug, String title, String description, UUID teacherId,
+                    LocalDate startDate, LocalDate endDate, Instant createdAt) {
         this.id = id;
         this.slug = slug;
         this.title = title;
         this.description = description;
         this.teacherId = teacherId;
+        this.startDate = startDate;
+        this.endDate = endDate;
         this.createdAt = createdAt;
     }
 
@@ -47,5 +57,7 @@ class CourseJpaEntity {
     String getTitle() { return title; }
     String getDescription() { return description; }
     UUID getTeacherId() { return teacherId; }
+    LocalDate getStartDate() { return startDate; }
+    LocalDate getEndDate() { return endDate; }
     Instant getCreatedAt() { return createdAt; }
 }

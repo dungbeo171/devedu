@@ -15,6 +15,10 @@ public interface ProgrammingProblemRepository {
 
     Optional<ProgrammingProblem> findBySlug(String slug);
 
+    default Optional<ProgrammingProblem> findById(java.util.UUID id) {
+        return findAll(null, null, null).stream().filter(problem -> problem.id().equals(id)).findFirst();
+    }
+
     boolean existsBySlug(String slug);
 
     ProgrammingProblem saveWithTestCases(ProgrammingProblem problem, List<ProblemTestCase> testCases);

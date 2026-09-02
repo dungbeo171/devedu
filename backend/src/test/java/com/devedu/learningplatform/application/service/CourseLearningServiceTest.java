@@ -6,19 +6,32 @@ import com.devedu.learningplatform.application.port.in.command.CreateCourseComma
 import com.devedu.learningplatform.application.port.in.command.CreateCourseTopicCommand;
 import com.devedu.learningplatform.application.port.in.command.CreateLessonCommand;
 import com.devedu.learningplatform.application.port.in.command.SetLessonVideoCommand;
+import com.devedu.learningplatform.application.port.in.command.EnrollCourseStudentsCommand;
+import com.devedu.learningplatform.application.port.in.command.UploadCourseMaterialCommand;
+import com.devedu.learningplatform.application.port.in.command.AccessCourseMaterialsCommand;
+import com.devedu.learningplatform.application.port.in.command.ManageCourseCommand;
+import com.devedu.learningplatform.application.port.in.command.ManageCourseStudentsCommand;
 import com.devedu.learningplatform.application.port.out.CourseRepository;
 import com.devedu.learningplatform.application.port.out.CourseTopicRepository;
 import com.devedu.learningplatform.application.port.out.LessonProgressRepository;
 import com.devedu.learningplatform.application.port.out.LessonRepository;
+import com.devedu.learningplatform.application.port.out.CourseEnrollmentRepository;
+import com.devedu.learningplatform.application.port.out.CourseMaterialRepository;
+import com.devedu.learningplatform.application.port.out.CourseFileStorage;
+import com.devedu.learningplatform.application.port.out.UserRepository;
 import com.devedu.learningplatform.domain.model.Course;
 import com.devedu.learningplatform.domain.model.CourseTopic;
 import com.devedu.learningplatform.domain.model.Lesson;
 import com.devedu.learningplatform.domain.model.LessonProgress;
 import com.devedu.learningplatform.domain.model.UserRole;
+import com.devedu.learningplatform.domain.model.User;
+import com.devedu.learningplatform.domain.model.CourseEnrollment;
+import com.devedu.learningplatform.domain.model.CourseMaterial;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,8 +54,13 @@ class CourseLearningServiceTest {
     private final TestTopicRepository topicRepository = new TestTopicRepository();
     private final TestLessonRepository lessonRepository = new TestLessonRepository();
     private final TestProgressRepository progressRepository = new TestProgressRepository();
+    private final TestEnrollmentRepository enrollmentRepository = new TestEnrollmentRepository();
+    private final TestMaterialRepository materialRepository = new TestMaterialRepository();
+    private final TestFileStorage fileStorage = new TestFileStorage();
+    private final TestUserRepository userRepository = new TestUserRepository();
     private final CourseLearningService service = new CourseLearningService(courseRepository, topicRepository,
-            lessonRepository, progressRepository, Clock.fixed(NOW, ZoneOffset.UTC));
+            lessonRepository, progressRepository, enrollmentRepository, materialRepository, fileStorage,
+            userRepository, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void teacherCreatesCourseContentAndPublishesVideoUrl() {
@@ -102,6 +120,65 @@ class CourseLearningServiceTest {
                 .hasMessageContaining("180");
     }
 
+    @Test
+    void teacherEnrollsStudentByCodeAndStudentCanAccessUploadedMaterial() {
+        var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-core", "Java Core", "Java nền tảng"));
+
+        var roster = service.enrollStudents(new EnrollCourseStudentsCommand(
+                TEACHER, UserRole.TEACHER, course.id(), "SV000003"));
+        var material = service.uploadMaterial(new UploadCourseMaterialCommand(
+                TEACHER, UserRole.TEACHER, course.id(), "Slide", "slide.pdf", new byte[]{1, 2, 3}));
+
+        assertThat(roster).extracting(item -> item.user().studentCode()).containsExactly("SV000003");
+        assertThat(service.listMaterials(new AccessCourseMaterialsCommand(STUDENT, UserRole.STUDENT, course.id())))
+                .containsExactly(material);
+        assertThat(fileStorage.files).containsKey(material.storageKey());
+    }
+
+    @Test
+    void managedCourseListContainsOnlyTeachersClassesWithCountAndStatus() {
+        var active = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-2026", "Java 2026", "", LocalDate.of(2026, 8, 1), null));
+        service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-2025", "Java 2025", "", LocalDate.of(2025, 1, 1), LocalDate.of(2025, 12, 31)));
+        service.createCourse(new CreateCourseCommand(OTHER_TEACHER, UserRole.TEACHER,
+                "cpp-2026", "C++ 2026", "", LocalDate.of(2026, 8, 1), null));
+        service.enrollStudents(new EnrollCourseStudentsCommand(
+                TEACHER, UserRole.TEACHER, active.id(), "SV000003"));
+
+        var managed = service.listManagedCourses(TEACHER, UserRole.TEACHER);
+
+        assertThat(managed).hasSize(2);
+        assertThat(managed).filteredOn(item -> item.course().id().equals(active.id())).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.studentCount()).isEqualTo(1);
+                    assertThat(item.status()).isEqualTo(com.devedu.learningplatform.domain.model.CourseStatus.ACTIVE);
+                });
+        assertThat(managed).filteredOn(item -> item.course().slug().equals("java-2025")).singleElement()
+                .satisfies(item -> assertThat(item.status())
+                        .isEqualTo(com.devedu.learningplatform.domain.model.CourseStatus.ENDED));
+    }
+
+    @Test
+    void teacherSearchesAddsAndRemovesStudentsFromOwnedCourse() {
+        var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-members", "Java Members", ""));
+
+        assertThat(service.searchAvailableStudents(
+                new ManageCourseCommand(TEACHER, UserRole.TEACHER, course.id()), "SV000003"))
+                .extracting(User::publicId).containsExactly(3L);
+
+        var added = service.addStudents(new ManageCourseStudentsCommand(
+                TEACHER, UserRole.TEACHER, course.id(), List.of(3L)));
+        assertThat(added).extracting(item -> item.user().studentCode()).containsExactly("SV000003");
+        assertThat(added.get(0).enrolledAt()).isEqualTo(NOW);
+
+        var removed = service.removeStudents(new ManageCourseStudentsCommand(
+                TEACHER, UserRole.TEACHER, course.id(), List.of(3L)));
+        assertThat(removed).isEmpty();
+    }
+
     private Lesson createLesson() {
         var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
                 "java-core", "Java Core", "Java nền tảng"));
@@ -138,5 +215,44 @@ class CourseLearningServiceTest {
         private final List<LessonProgress> progresses = new ArrayList<>();
         @Override public Optional<LessonProgress> findByStudentIdAndLessonId(UUID studentId, UUID lessonId) { return progresses.stream().filter(p -> p.studentId().equals(studentId) && p.lessonId().equals(lessonId)).findFirst(); }
         @Override public LessonProgress save(LessonProgress progress) { progresses.add(progress); return progress; }
+    }
+
+    private static final class TestEnrollmentRepository implements CourseEnrollmentRepository {
+        private final List<CourseEnrollment> values = new ArrayList<>();
+        @Override public boolean existsByCourseIdAndStudentId(UUID courseId, UUID studentId) { return values.stream().anyMatch(value -> value.courseId().equals(courseId) && value.studentId().equals(studentId)); }
+        @Override public List<CourseEnrollment> saveAll(List<CourseEnrollment> enrollments) { values.addAll(enrollments); return enrollments; }
+        @Override public List<UUID> findStudentIdsByCourseId(UUID courseId) { return values.stream().filter(value -> value.courseId().equals(courseId)).map(CourseEnrollment::studentId).toList(); }
+        @Override public List<CourseEnrollment> findAllByCourseId(UUID courseId) { return values.stream().filter(value -> value.courseId().equals(courseId)).toList(); }
+        @Override public void deleteByCourseIdAndStudentIds(UUID courseId, List<UUID> studentIds) { values.removeIf(value -> value.courseId().equals(courseId) && studentIds.contains(value.studentId())); }
+    }
+
+    private static final class TestMaterialRepository implements CourseMaterialRepository {
+        private final Map<UUID, CourseMaterial> values = new HashMap<>();
+        @Override public CourseMaterial save(CourseMaterial material) { values.put(material.id(), material); return material; }
+        @Override public Optional<CourseMaterial> findById(UUID id) { return Optional.ofNullable(values.get(id)); }
+        @Override public List<CourseMaterial> findAllByCourseId(UUID courseId) { return values.values().stream().filter(value -> value.courseId().equals(courseId)).toList(); }
+    }
+
+    private static final class TestFileStorage implements CourseFileStorage {
+        private final Map<String, byte[]> files = new HashMap<>();
+        @Override public void store(String storageKey, byte[] content) { files.put(storageKey, content.clone()); }
+        @Override public byte[] load(String storageKey) { return files.get(storageKey).clone(); }
+        @Override public void delete(String storageKey) { files.remove(storageKey); }
+    }
+
+    private static final class TestUserRepository implements UserRepository {
+        private final Map<UUID, User> users = new HashMap<>();
+        private TestUserRepository() {
+            users.put(STUDENT, new User(STUDENT, 3, "SV000003", null, "Student", "student@example.com",
+                    "hash", UserRole.STUDENT, NOW));
+        }
+        @Override public boolean existsByEmail(String email) { return users.values().stream().anyMatch(user -> user.email().equals(email)); }
+        @Override public Optional<User> findByEmail(String email) { return users.values().stream().filter(user -> user.email().equals(email)).findFirst(); }
+        @Override public Optional<User> findById(UUID id) { return Optional.ofNullable(users.get(id)); }
+        @Override public Optional<User> findByPublicId(long publicId) { return users.values().stream().filter(user -> user.publicId() == publicId).findFirst(); }
+        @Override public Optional<User> findByStudentCode(String code) { return users.values().stream().filter(user -> code.equals(user.studentCode())).findFirst(); }
+        @Override public List<User> findAll() { return List.copyOf(users.values()); }
+        @Override public User save(User user) { users.put(user.id(), user); return user; }
+        @Override public void deleteById(UUID id) { users.remove(id); }
     }
 }

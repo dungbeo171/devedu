@@ -23,7 +23,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getManagedUsers = () => request<ManagedUser[]>('/api/admin/users')
 
-export const updateManagedUserRole = (userId: string, role: UserRole) => request<ManagedUser>(
+export const updateManagedUserRole = (userId: number, role: UserRole) => request<ManagedUser>(
   `/api/admin/users/${encodeURIComponent(userId)}/role`,
   {
     method: 'PATCH',

@@ -10,6 +10,20 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS name VARCHAR(100) NOT NULL DEFAULT '';
 UPDATE users SET name = split_part(email, '@', 1) WHERE name = '';
 
+CREATE SEQUENCE IF NOT EXISTS user_public_id_seq START WITH 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS public_id BIGINT;
+UPDATE users SET public_id = nextval('user_public_id_seq') WHERE public_id IS NULL;
+SELECT setval('user_public_id_seq', COALESCE((SELECT MAX(public_id) FROM users), 0) + 1, false);
+ALTER TABLE users ALTER COLUMN public_id SET DEFAULT nextval('user_public_id_seq');
+ALTER TABLE users ALTER COLUMN public_id SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_users_public_id ON users (public_id);
+DROP INDEX IF EXISTS uk_users_student_code;
+DROP INDEX IF EXISTS uk_users_teacher_code;
+ALTER TABLE users DROP COLUMN IF EXISTS student_code;
+ALTER TABLE users DROP COLUMN IF EXISTS teacher_code;
+DROP SEQUENCE IF EXISTS student_code_seq;
+DROP SEQUENCE IF EXISTS teacher_code_seq;
+
 CREATE TABLE IF NOT EXISTS interview_questions (
     id UUID PRIMARY KEY,
     question TEXT NOT NULL,
@@ -84,8 +98,17 @@ CREATE TABLE IF NOT EXISTS courses (
     title VARCHAR(180) NOT NULL,
     description TEXT NOT NULL,
     teacher_id UUID NOT NULL REFERENCES users(id),
+    start_date DATE NOT NULL,
+    end_date DATE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS start_date DATE;
+UPDATE courses SET start_date = (created_at AT TIME ZONE 'UTC')::date WHERE start_date IS NULL;
+ALTER TABLE courses ALTER COLUMN start_date SET NOT NULL;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_date_range_check;
+ALTER TABLE courses ADD CONSTRAINT courses_date_range_check CHECK (end_date IS NULL OR end_date >= start_date);
 
 CREATE TABLE IF NOT EXISTS course_topics (
     id UUID PRIMARY KEY,
@@ -112,6 +135,29 @@ CREATE TABLE IF NOT EXISTS lesson_progress (
     completed_at TIMESTAMP WITH TIME ZONE NOT NULL,
     UNIQUE (student_id, lesson_id)
 );
+
+CREATE TABLE IF NOT EXISTS course_enrollments (
+    id UUID PRIMARY KEY,
+    course_id UUID NOT NULL REFERENCES courses(id),
+    student_id UUID NOT NULL REFERENCES users(id),
+    enrolled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    UNIQUE (course_id, student_id)
+);
+ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
+
+CREATE TABLE IF NOT EXISTS course_materials (
+    id UUID PRIMARY KEY,
+    course_id UUID NOT NULL REFERENCES courses(id),
+    title VARCHAR(180) NOT NULL,
+    original_file_name VARCHAR(255) NOT NULL,
+    storage_key VARCHAR(100) NOT NULL UNIQUE,
+    content_type VARCHAR(150) NOT NULL,
+    size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
+    uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_course ON course_enrollments (course_id, enrolled_at);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_student ON course_enrollments (student_id, enrolled_at);
+CREATE INDEX IF NOT EXISTS idx_course_materials_course ON course_materials (course_id, uploaded_at DESC);
 
 CREATE TABLE IF NOT EXISTS programming_problems (
     id UUID PRIMARY KEY,
@@ -182,6 +228,17 @@ CREATE TABLE IF NOT EXISTS problem_drafts (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT uk_problem_drafts_student_problem UNIQUE (student_id, problem_id)
 );
+
+CREATE TABLE IF NOT EXISTS course_problem_assignments (
+    id UUID PRIMARY KEY,
+    course_id UUID NOT NULL REFERENCES courses(id),
+    problem_id UUID NOT NULL REFERENCES programming_problems(id),
+    assigned_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    UNIQUE (course_id, problem_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_problem_assignments_course
+    ON course_problem_assignments (course_id, assigned_at);
 
 CREATE INDEX IF NOT EXISTS idx_interview_questions_topic_difficulty_question
     ON interview_questions (topic, difficulty, question);

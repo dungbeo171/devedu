@@ -45,16 +45,15 @@ public final class AdminUserManagementService implements AdminUserManagementUseC
         Objects.requireNonNull(command, "Update user role command is required");
         requireAdmin(command.actorRole());
         Objects.requireNonNull(command.actorId(), "Actor id is required");
-        Objects.requireNonNull(command.userId(), "User id is required");
         Objects.requireNonNull(command.role(), "User role is required");
-        if (command.actorId().equals(command.userId())) {
+        var user = userRepository.findByPublicId(command.userId()).orElseThrow(UserNotFoundException::new);
+        if (command.actorId().equals(user.id())) {
             throw new UserManagementForbiddenException("Administrators cannot change their own role");
         }
-
-        var user = userRepository.findById(command.userId()).orElseThrow(UserNotFoundException::new);
         if (user.role() == command.role()) return user;
         return userRepository.save(new User(
-                user.id(), user.name(), user.email(), user.passwordHash(), command.role(), user.createdAt()
+                user.id(), user.publicId(), user.studentCode(), user.teacherCode(), user.name(), user.email(),
+                user.passwordHash(), command.role(), user.createdAt()
         ));
     }
 
@@ -80,10 +79,9 @@ public final class AdminUserManagementService implements AdminUserManagementUseC
         Objects.requireNonNull(command, "Update user command is required");
         requireAdmin(command.actorRole());
         Objects.requireNonNull(command.actorId(), "Actor id is required");
-        Objects.requireNonNull(command.userId(), "User id is required");
         Objects.requireNonNull(command.role(), "User role is required");
-        var current = userRepository.findById(command.userId()).orElseThrow(UserNotFoundException::new);
-        if (command.actorId().equals(command.userId()) && current.role() != command.role()) {
+        var current = userRepository.findByPublicId(command.userId()).orElseThrow(UserNotFoundException::new);
+        if (command.actorId().equals(current.id()) && current.role() != command.role()) {
             throw new UserManagementForbiddenException("Administrators cannot change their own role");
         }
         var name = User.normalizeName(command.name());
@@ -98,7 +96,8 @@ public final class AdminUserManagementService implements AdminUserManagementUseC
             passwordHash = passwordHasher.hash(command.password());
         }
         return userRepository.save(new User(
-                current.id(), name, email, passwordHash, command.role(), current.createdAt()
+                current.id(), current.publicId(), current.studentCode(), current.teacherCode(), name, email,
+                passwordHash, command.role(), current.createdAt()
         ));
     }
 
@@ -107,12 +106,11 @@ public final class AdminUserManagementService implements AdminUserManagementUseC
         Objects.requireNonNull(command, "Delete user command is required");
         requireAdmin(command.actorRole());
         Objects.requireNonNull(command.actorId(), "Actor id is required");
-        Objects.requireNonNull(command.userId(), "User id is required");
-        if (command.actorId().equals(command.userId())) {
+        var user = userRepository.findByPublicId(command.userId()).orElseThrow(UserNotFoundException::new);
+        if (command.actorId().equals(user.id())) {
             throw new UserManagementForbiddenException("Administrators cannot delete their own account");
         }
-        if (userRepository.findById(command.userId()).isEmpty()) throw new UserNotFoundException();
-        userRepository.deleteById(command.userId());
+        userRepository.deleteById(user.id());
     }
 
     @Override

@@ -2,7 +2,10 @@ export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
 export type OAuthProvider = 'google' | 'github'
 
 export interface AuthenticatedUser {
-  id: string
+  id: number
+  publicId: number
+  studentCode: string | null
+  teacherCode: string | null
   name: string
   email: string
   role: UserRole

@@ -1,3 +1,6 @@
 package com.devedu.learningplatform.presentation.rest.dto;
 
-public record CreateCourseRequest(String slug, String title, String description) {}
+import java.time.LocalDate;
+
+public record CreateCourseRequest(String slug, String title, String description,
+                                  LocalDate startDate, LocalDate endDate) {}

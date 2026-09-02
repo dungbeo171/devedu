@@ -7,7 +7,7 @@ import java.util.UUID;
 public record UpdateManagedUserCommand(
         UUID actorId,
         UserRole actorRole,
-        UUID userId,
+        long userId,
         String name,
         String email,
         String password,

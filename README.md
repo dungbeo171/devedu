@@ -90,7 +90,7 @@ Các trang frontend:
 
 - `/` — Code Compiler
 - `/problems` — Programming Problems
-- `/courses` — Course/Lesson
+- `/courses` — Lớp học dành cho giáo viên/admin
 - `/exams` — Exam
 - `/interview` — Interview
 
@@ -220,6 +220,8 @@ Content-Type: application/json
 ```
 
 Role hợp lệ gồm `STUDENT`, `TEACHER`, `ADMIN`. Admin không thể tự đổi role của chính mình; người được đổi role cần đăng nhập lại để JWT mới mang quyền vừa được cấp.
+
+UUID chỉ còn là khóa kỹ thuật nội bộ cho JWT và khóa ngoại, không được hiển thị làm ID tài khoản. API trả `id`/`publicId` dạng số; dãy ID học viên/giáo viên tự tăng từ `1` và tài khoản admin bootstrap không chiếm dãy này. Mã được suy ra từ ID: sinh viên dùng `SV000001...`, giáo viên dùng `GV000001...`.
 - Endpoint không khớp rule cụ thể: cần JWT hợp lệ.
 
 `JWT_SECRET` cần có ít nhất 32 byte UTF-8 trong môi trường triển khai. Production bắt buộc cấu hình secret ổn định, ngẫu nhiên và không ghi vào source/log. Khi chạy local mà không cấu hình, ứng dụng tạo secret ngẫu nhiên; token local sẽ hết hiệu lực sau mỗi lần restart. Backend standalone mặc định một giờ; Compose local dùng `P7D` trong `.env` để phiên đăng nhập còn hiệu lực qua các lần khởi động máy. Có thể đổi bằng duration ISO-8601 qua `JWT_EXPIRATION`. Frontend kiểm tra claim `exp` trước khi hiển thị user và tự xóa trạng thái đăng nhập đã hết hạn. Response register/login có `Cache-Control: no-store`; JWT xác minh HS256, `typ`, thời điểm phát hành/hết hạn và chữ ký constant-time. Password giới hạn tối đa 72 UTF-8 byte theo BCrypt; login email không tồn tại vẫn chạy một dummy BCrypt check để giảm timing signal cho account enumeration.
@@ -363,7 +365,9 @@ Frontend lấy access token từ key `devedu.accessToken` (fallback `accessToken
 
 ## Course/Lesson
 
-Home có catalog môn học, màn hình lesson/video và Teacher Studio. Video chỉ lưu URL HTTP/HTTPS; project chưa có upload, storage hoặc streaming riêng.
+Trang `/courses` là màn hình “Lớp học” duy nhất. Giáo viên/admin quản lý sinh viên và gán/gỡ các bài lập trình hiện có. Sinh viên chỉ thấy lớp mình đã được thêm vào, làm bài qua workspace Programming Problems và xem tiến trình `ACCEPTED` theo công thức `số bài đã giải / tổng bài được giao`; ví dụ 1/5 hiển thị 20%. `Teacher Studio` cũ đã được loại bỏ.
+
+Thao tác sửa sinh viên trong lớp chỉ đổi tên hiển thị của enrollment; thông tin tài khoản toàn cục và email của sinh viên không bị thay đổi.
 
 API đọc nội dung (public):
 
@@ -377,18 +381,43 @@ API giáo viên (`TEACHER` hoặc `ADMIN`):
 
 ```http
 POST /api/teacher/courses
+GET  /api/teacher/courses
 POST /api/teacher/courses/{courseId}/topics
 POST /api/teacher/topics/{topicId}/lessons
 PUT  /api/teacher/lessons/{lessonId}/video
+GET  /api/teacher/courses/{courseId}/students
+POST /api/teacher/courses/{courseId}/students
+GET  /api/teacher/courses/{courseId}/student-candidates?q={query}
+POST /api/teacher/courses/{courseId}/students/bulk
+DELETE /api/teacher/courses/{courseId}/students
+GET  /api/teacher/courses/{courseId}/problems
+POST /api/teacher/courses/{courseId}/problems
+DELETE /api/teacher/courses/{courseId}/problems/{problemId}
+POST /api/teacher/courses/{courseId}/students/import
+POST /api/teacher/courses/{courseId}/materials
 Authorization: Bearer <teacher-access-token>
 ```
+
+Import sinh viên dùng file `.txt` UTF-8, mỗi dòng một mã `SV...` (cũng chấp nhận dấu cách, dấu phẩy hoặc dấu chấm phẩy), tối đa 1000 mã và 1 MB. Upload tài liệu dùng `multipart/form-data`, chỉ nhận `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`, tối đa 20 MB.
 
 `TEACHER` chỉ chỉnh sửa khóa học do mình tạo; `ADMIN` có thể quản lý mọi khóa học. Sinh viên đánh dấu hoàn thành bằng endpoint idempotent:
 
 ```http
 POST /api/student/lessons/{lessonId}/complete
+GET  /api/courses/{courseId}/materials
+GET  /api/course-materials/{materialId}/content
 Authorization: Bearer <student-access-token>
 ```
+
+API lớp học dành cho sinh viên:
+
+```http
+GET /api/student/courses
+GET /api/student/courses/{courseId}
+Authorization: Bearer <student-access-token>
+```
+
+Hai endpoint tài liệu chỉ cho sinh viên đã được thêm vào lớp; giáo viên sở hữu và admin cũng có quyền truy cập.
 
 Frontend đọc token từ `devedu.accessToken` (fallback `accessToken`) cho các thao tác được bảo vệ.
 

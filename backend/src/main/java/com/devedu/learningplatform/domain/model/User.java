@@ -8,6 +8,9 @@ import java.util.regex.Pattern;
 
 public record User(
         UUID id,
+        long publicId,
+        String studentCode,
+        String teacherCode,
         String name,
         String email,
         String passwordHash,
@@ -19,13 +22,20 @@ public record User(
 
     public User {
         Objects.requireNonNull(id, "User id is required");
+        Objects.requireNonNull(role, "User role is required");
+        if (publicId < 0 && role != UserRole.ADMIN) {
+            throw new IllegalArgumentException("Academic user id must not be negative");
+        }
         name = normalizeName(name);
         email = normalizeEmail(email);
         if (passwordHash == null || passwordHash.isBlank()) {
             throw new IllegalArgumentException("Password hash is required");
         }
-        Objects.requireNonNull(role, "User role is required");
         Objects.requireNonNull(createdAt, "Created time is required");
+    }
+
+    public User(UUID id, String name, String email, String passwordHash, UserRole role, Instant createdAt) {
+        this(id, 0, null, null, name, email, passwordHash, role, createdAt);
     }
 
     public static String normalizeEmail(String email) {

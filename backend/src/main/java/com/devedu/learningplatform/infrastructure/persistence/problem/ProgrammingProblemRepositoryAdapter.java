@@ -45,6 +45,11 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
     }
 
     @Override
+    public Optional<ProgrammingProblem> findById(java.util.UUID id) {
+        return repository.findByIdAndDeletedFalse(id).map(this::toDomain);
+    }
+
+    @Override
     public boolean existsBySlug(String slug) {
         return repository.existsBySlug(slug);
     }

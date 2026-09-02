@@ -12,9 +12,9 @@ FROM eclipse-temurin:17-jdk-alpine-3.23
 RUN apk add --no-cache docker-cli \
     && addgroup -S -g 10001 devedu \
     && adduser -S -D -H -u 10001 -G devedu devedu \
-    && mkdir -p /app /judge-workspaces \
+    && mkdir -p /app /judge-workspaces /course-materials \
     && touch /judge-workspaces/.initialized \
-    && chown -R devedu:devedu /app /judge-workspaces
+    && chown -R devedu:devedu /app /judge-workspaces /course-materials
 
 WORKDIR /app
 COPY --from=build --chown=devedu:devedu /workspace/target/learning-platform-*.jar app.jar
