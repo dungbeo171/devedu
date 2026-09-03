@@ -51,20 +51,20 @@ export function AdminUsersPage() {
 
   return (
     <section>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="ui-page-header">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-blue-400">
+          <div className="ui-kicker">
             <IconShield className="h-3.5 w-3.5" />
-            <span>Admin console</span>
+            <span>Quản trị hệ thống</span>
           </div>
-          <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+          <h1 className="ui-page-title mt-2">
             Quản lý người dùng
-          </h2>
-          <p className="mt-1 text-xs text-slate-400">
+          </h1>
+          <p className="ui-page-description">
             Xem danh sách tài khoản hệ thống và cấp quyền Sinh viên, Giáo viên hoặc Quản trị viên.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300">
+        <div className="ui-badge">
           <span className="h-2 w-2 rounded-full bg-blue-500" />
           <span>{loading ? 'Đang tải...' : `${users.length} tài khoản`}</span>
         </div>
@@ -73,16 +73,18 @@ export function AdminUsersPage() {
       {message ? (
         <div
           aria-live="polite"
-          className="mt-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs font-semibold text-blue-300"
+          className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800"
         >
           {message}
         </div>
       ) : null}
 
+      {loading ? <div className="ui-skeleton mt-6 h-72 rounded-[18px]" /> : null}
+
       {!loading && currentUser?.role === 'ADMIN' ? (
-        <div className="mt-6 overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/80 shadow-2xl shadow-black/40 backdrop-blur-md">
+        <div className="ui-panel mt-6 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-white/10 bg-slate-950/60 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
               <tr>
                 <th className="px-6 py-4">Người dùng</th>
                 <th className="px-6 py-4">Email</th>
@@ -98,18 +100,18 @@ export function AdminUsersPage() {
                 return (
                   <tr
                     key={user.id}
-                    className="border-t border-white/5 transition hover:bg-white/5"
+                    className="border-t border-slate-100 transition hover:bg-blue-50/45"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 font-mono text-sm font-bold text-white shadow-md shadow-blue-500/20 ring-1 ring-white/20">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-blue-600 font-mono text-sm font-bold text-white shadow-sm">
                           {user.name.charAt(0).toLocaleUpperCase('vi')}
                         </span>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-white">{user.name}</span>
+                            <span className="font-bold text-slate-950">{user.name}</span>
                             {isCurrentAdmin ? (
-                              <span className="rounded-md border border-blue-500/30 bg-blue-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-blue-300">
+                              <span className="rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
                                 Bạn
                               </span>
                             ) : null}
@@ -122,7 +124,7 @@ export function AdminUsersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-300">{user.email}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-slate-600">{user.email}</td>
                     <td className="px-6 py-4 text-xs font-medium text-slate-400">
                       {new Date(user.createdAt).toLocaleDateString('vi-VN', {
                         day: '2-digit',
@@ -141,14 +143,14 @@ export function AdminUsersPage() {
                           }
                           className={`rounded-xl border px-3 py-1.5 font-mono text-xs font-bold outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${
                             user.role === 'ADMIN'
-                              ? 'border-rose-500/30 bg-rose-500/10 text-rose-300 focus:border-rose-500'
+                              ? 'border-red-200 bg-red-50 text-red-700 focus:border-red-500'
                               : user.role === 'TEACHER'
-                              ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300 focus:border-indigo-500'
-                              : 'border-blue-500/30 bg-blue-500/10 text-blue-300 focus:border-blue-500'
+                              ? 'border-blue-200 bg-blue-50 text-blue-800 focus:border-blue-500'
+                              : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500'
                           }`}
                         >
                           {roles.map((role) => (
-                            <option key={role} value={role} className="bg-slate-900 text-white">
+                            <option key={role} value={role} className="bg-white text-slate-900">
                               {roleLabels[role]}
                             </option>
                           ))}

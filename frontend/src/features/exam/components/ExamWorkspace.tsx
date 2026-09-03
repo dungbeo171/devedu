@@ -70,30 +70,30 @@ export function ExamWorkspace({
 
   if (result) {
     return (
-      <div className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-slate-900/90 p-8 text-center shadow-2xl shadow-black/60 backdrop-blur-xl ring-1 ring-white/5 sm:p-12">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 text-emerald-400 ring-1 ring-emerald-500/30">
+      <div className="ui-panel mx-auto max-w-xl p-8 text-center sm:p-12">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-xl bg-blue-50 text-blue-600 ring-1 ring-blue-100">
           <IconTrophy className="h-8 w-8" />
         </div>
-        <p className="mt-5 font-mono text-xs font-bold uppercase tracking-widest text-emerald-400">
+        <p className="mt-5 text-xs font-bold uppercase tracking-widest text-blue-700">
           Đã hoàn thành kỳ thi
         </p>
-        <h3 className="mt-3 text-4xl font-black text-white">
+        <h1 className="mt-3 text-4xl font-bold text-slate-950">
           {result.automaticScore} <span className="text-xl font-bold text-slate-500">/ {result.automaticMaxScore}</span>
-        </h3>
-        <p className="mt-2 text-xs text-slate-400">
+        </h1>
+        <p className="mt-2 text-sm text-slate-600">
           Điểm tự động từ các câu trắc nghiệm (Multiple Choice).
         </p>
 
         {result.pendingCodingQuestions > 0 ? (
-          <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-bold text-amber-300">
-            ⏳ {result.pendingCodingQuestions} câu Coding đang chờ giảng viên chấm điểm.
+          <div className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+            <IconClock className="h-4 w-4" /> {result.pendingCodingQuestions} câu Coding đang chờ giảng viên chấm điểm.
           </div>
         ) : null}
 
         <button
           type="button"
           onClick={onBack}
-          className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 transition hover:from-blue-500 hover:to-indigo-500"
+          className="ui-button-primary mt-8"
         >
           <IconArrowLeft className="h-3.5 w-3.5" />
           <span>Về danh sách kỳ thi</span>
@@ -104,7 +104,7 @@ export function ExamWorkspace({
 
   if (session.status === 'SUBMITTED') {
     return (
-      <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-12 text-center text-xs font-semibold text-slate-400">
+      <div className="ui-state text-sm font-semibold">
         {message || 'Đang tải kết quả bài thi...'}
       </div>
     )
@@ -114,32 +114,32 @@ export function ExamWorkspace({
     <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
       {/* Questions list */}
       <div className="space-y-6">
-        <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/30 backdrop-blur-md">
+        <div className="ui-panel p-6">
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 transition hover:text-white"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 transition hover:text-blue-700"
           >
             <IconArrowLeft className="h-3.5 w-3.5" />
             <span>Danh sách kỳ thi</span>
           </button>
-          <h3 className="mt-3 text-2xl font-black tracking-tight text-white">{session.exam.title}</h3>
-          <p className="mt-1 text-xs text-slate-400">{session.exam.description}</p>
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950">{session.exam.title}</h1>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{session.exam.description}</p>
         </div>
 
         {session.exam.questions.map((question) => (
           <article
             key={question.id}
-            className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl shadow-black/30 backdrop-blur-md sm:p-7"
+            className="ui-panel p-6 sm:p-7"
           >
             <div className="flex items-start justify-between gap-4">
-              <p className="text-sm font-bold leading-6 text-white">
+              <p className="text-sm font-bold leading-6 text-slate-950">
                 <span className="mr-2 inline-block rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 font-mono text-xs font-bold text-blue-400">
                   Câu {question.position}
                 </span>
                 {question.prompt}
               </p>
-              <span className="shrink-0 rounded-lg border border-white/5 bg-slate-800/60 px-2.5 py-1 font-mono text-xs font-bold text-slate-400">
+              <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs font-bold text-slate-600">
                 {question.points} điểm
               </span>
             </div>
@@ -153,8 +153,8 @@ export function ExamWorkspace({
                       key={index}
                       className={`flex cursor-pointer items-center gap-3.5 rounded-2xl border p-4 text-xs font-semibold transition-all ${
                         isChecked
-                          ? 'border-blue-500 bg-blue-500/15 text-white shadow-md shadow-blue-500/10 ring-1 ring-blue-500/30'
-                          : 'border-white/10 bg-slate-950/40 text-slate-300 hover:border-white/20 hover:bg-slate-950/80'
+                          ? 'border-blue-500 bg-blue-50 text-blue-950 shadow-sm ring-1 ring-blue-200'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50/40'
                       }`}
                     >
                       <input
@@ -188,7 +188,7 @@ export function ExamWorkspace({
                 <button
                   type="button"
                   onClick={() => void persist(question.id, { sourceCode: drafts[question.id] ?? '' })}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-bold text-blue-400 transition hover:bg-blue-500/20"
+                  className="ui-button-secondary mt-3"
                 >
                   <IconSave className="h-3.5 w-3.5" />
                   <span>Lưu mã nguồn</span>
@@ -199,14 +199,14 @@ export function ExamWorkspace({
         ))}
 
         {message ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-bold text-rose-300">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
             {message}
           </div>
         ) : null}
       </div>
 
       {/* Sticky Exam Timer & Question Matrix */}
-      <aside className="h-fit rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-xl ring-1 ring-white/5 lg:sticky lg:top-24">
+      <aside className="ui-panel h-fit p-6 lg:sticky lg:top-24">
         <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
           <IconClock className="h-3.5 w-3.5" />
           <span>Thời gian còn lại</span>
@@ -219,7 +219,7 @@ export function ExamWorkspace({
           {timeLabel}
         </p>
 
-        <div className="my-5 h-px bg-white/10" />
+        <div className="my-5 h-px bg-slate-200" />
 
         <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">Bảng câu hỏi</p>
         <div className="mt-3 grid grid-cols-5 gap-2">
@@ -230,8 +230,8 @@ export function ExamWorkspace({
                 key={q.id}
                 className={`grid h-8 place-items-center rounded-xl font-mono text-xs font-bold transition-all ${
                   hasAnswer
-                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-white/20'
-                    : 'border border-white/10 bg-slate-800/60 text-slate-400'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'border border-slate-200 bg-slate-50 text-slate-500'
                 }`}
               >
                 {q.position}
@@ -248,7 +248,7 @@ export function ExamWorkspace({
         <button
           type="button"
           onClick={() => void finish()}
-          className="mt-6 w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-xs font-bold text-white shadow-lg shadow-blue-600/25 ring-1 ring-white/20 transition hover:from-blue-500 hover:to-indigo-500"
+          className="ui-button-primary mt-6 w-full"
         >
           Nộp bài thi
         </button>

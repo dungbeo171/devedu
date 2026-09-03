@@ -79,7 +79,7 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-1.5 text-xs font-bold text-slate-300 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-slate-800 hover:text-white"
+          className="ui-button-ghost px-0 hover:bg-transparent hover:text-blue-700"
         >
           <IconArrowLeft className="h-3.5 w-3.5" />
           <span>Giao diện sinh viên</span>
@@ -90,10 +90,10 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
               key={item}
               type="button"
               onClick={() => setMode(item)}
-              className={`rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              className={`min-h-10 rounded-[10px] px-4 text-xs font-bold transition-all ${
                 mode === item
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-white/20'
-                  : 'border border-white/10 bg-slate-900/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
               }`}
             >
               {item === 'create'
@@ -108,7 +108,7 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
 
       <form
         onSubmit={(e) => void submit(e)}
-        className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-md sm:p-8"
+        className="ui-panel p-6 sm:p-8"
       >
         <div className="grid gap-5 sm:grid-cols-2">
           {mode !== 'create' ? (
@@ -216,7 +216,7 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
           <div className="sm:col-span-2">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 ring-1 ring-white/20 transition hover:from-blue-500 hover:to-indigo-500"
+              className="ui-button-primary"
             >
               <IconSave className="h-3.5 w-3.5" />
               <span>{mode === 'results' ? 'Tải kết quả bài thi' : 'Lưu dữ liệu'}</span>
@@ -225,16 +225,16 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
         </div>
 
         {message ? (
-          <div className="mt-5 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs font-semibold text-blue-300">
+          <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
             {message}
           </div>
         ) : null}
       </form>
 
       {mode === 'results' && results.length > 0 ? (
-        <div className="overflow-x-auto rounded-3xl border border-white/10 bg-slate-900/80 shadow-2xl shadow-black/40 backdrop-blur-md">
+        <div className="ui-panel overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-white/10 bg-slate-950/60 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
               <tr>
                 <th className="p-4">Student ID</th>
                 <th className="p-4">Trạng thái</th>
@@ -244,20 +244,20 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
             </thead>
             <tbody>
               {results.map((r) => (
-                <tr key={r.attemptId} className="border-t border-white/5 text-slate-300 transition hover:bg-white/5">
-                  <td className="p-4 font-mono text-xs font-semibold text-white">{r.studentId}</td>
+                <tr key={r.attemptId} className="border-t border-slate-100 text-slate-700 transition hover:bg-blue-50/40">
+                  <td className="p-4 font-mono text-xs font-semibold text-slate-950">{r.studentId}</td>
                   <td className="p-4">
                     <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 font-mono text-[10px] font-bold text-blue-400">
                       {r.status}
                     </span>
                   </td>
                   <td className="p-4">
-                    <span className="font-bold text-white">
+                    <span className="font-bold text-slate-950">
                       {r.automaticScore} / {r.automaticMaxScore}
                     </span>
                     {r.pendingCodingQuestions > 0 ? (
                       <span className="block text-xs font-semibold text-amber-400">
-                        ⏳ {r.pendingCodingQuestions} coding chờ chấm
+                        {r.pendingCodingQuestions} coding chờ chấm
                       </span>
                     ) : null}
                   </td>
@@ -270,7 +270,7 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
                         {r.answers.map((answer) => (
                           <pre
                             key={answer.id}
-                            className="max-w-md overflow-x-auto whitespace-pre-wrap rounded-xl border border-white/10 bg-slate-950 p-3 font-mono text-xs text-slate-200"
+                            className="max-w-md overflow-x-auto whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950 p-3 font-mono text-xs text-slate-200"
                           >
                             {answer.sourceCode ?? `Lựa chọn #${(answer.selectedOptionIndex ?? 0) + 1}`}
                           </pre>
@@ -302,7 +302,7 @@ function Field({
   placeholder?: string
 }) {
   return (
-    <label className="block text-xs font-bold text-slate-300">
+    <label className="block text-sm font-semibold text-slate-700">
       {label}
       <input
         required
@@ -311,7 +311,7 @@ function Field({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2.5 text-xs text-white outline-none placeholder:text-slate-600 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        className="ui-control mt-2"
       />
     </label>
   )
@@ -329,7 +329,7 @@ function Area({
   placeholder?: string
 }) {
   return (
-    <label className="block text-xs font-bold text-slate-300 sm:col-span-2">
+    <label className="block text-sm font-semibold text-slate-700 sm:col-span-2">
       {label}
       <textarea
         required
@@ -337,7 +337,7 @@ function Area({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2.5 text-xs text-white outline-none placeholder:text-slate-600 transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        className="ui-control mt-2"
       />
     </label>
   )
@@ -355,16 +355,16 @@ function Select({
   options: { value: string; label: string }[]
 }) {
   return (
-    <label className="block text-xs font-bold text-slate-300">
+    <label className="block text-sm font-semibold text-slate-700">
       {label}
       <select
         required
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2.5 text-xs font-semibold text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        className="ui-control mt-2 font-semibold"
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-slate-900 text-white">
+          <option key={o.value} value={o.value} className="bg-white text-slate-900">
             {o.label}
           </option>
         ))}

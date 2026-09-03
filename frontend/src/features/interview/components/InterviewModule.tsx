@@ -11,6 +11,8 @@ import {
 import {
   IconChevronDown,
   IconChevronUp,
+  IconBookOpen,
+  IconCheckCircle,
   IconSparkles,
 } from '../../../shared/components/Icons'
 
@@ -77,26 +79,26 @@ export function InterviewModule() {
 
   return (
     <section>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="ui-page-header">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-teal-500/30 bg-teal-500/10 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-teal-400">
+          <div className="ui-kicker">
             <IconSparkles className="h-3.5 w-3.5" />
-            <span>Interview preparation</span>
+            <span>Ôn tập kiến thức</span>
           </div>
-          <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+          <h1 className="ui-page-title mt-2">
             Câu hỏi phỏng vấn
-          </h2>
-          <p className="mt-1.5 max-w-2xl text-xs text-slate-400 leading-relaxed">
+          </h1>
+          <p className="ui-page-description">
             Ôn luyện kiến thức cốt lõi theo chủ đề, tự suy nghĩ trước khi mở đáp án & phần giải thích chi tiết.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-slate-300">
-          <span className="h-2 w-2 rounded-full bg-teal-500" />
+        <div className="ui-badge">
+          <span className="h-2 w-2 rounded-full bg-blue-600" />
           <span>{loading ? 'Đang tải...' : `${questions.length} câu hỏi`}</span>
         </div>
       </div>
 
-      <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/80 p-5 shadow-xl shadow-black/30 backdrop-blur-md">
+      <div className="ui-panel mt-6 p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
           <Filter
             label="Chủ đề kiến thức"
@@ -116,7 +118,7 @@ export function InterviewModule() {
               setTopic('ALL')
               setDifficulty('ALL')
             }}
-            className="mt-auto inline-flex items-center justify-center rounded-xl border border-white/10 bg-slate-800/80 px-4 py-2.5 text-xs font-bold text-slate-300 transition hover:bg-slate-700 hover:text-white"
+            className="ui-button-secondary mt-auto"
           >
             Xóa bộ lọc
           </button>
@@ -124,7 +126,7 @@ export function InterviewModule() {
       </div>
 
       {message ? (
-        <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 text-xs font-bold text-amber-300">
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm font-semibold text-amber-800">
           {message}
         </div>
       ) : null}
@@ -135,10 +137,10 @@ export function InterviewModule() {
           return (
             <article
               key={item.id}
-              className={`rounded-3xl border transition-all ${
+              className={`overflow-hidden rounded-[14px] border bg-white transition-all ${
                 isOpen
-                  ? 'border-blue-500/50 bg-slate-900/95 shadow-2xl shadow-blue-500/10 ring-1 ring-blue-500/30'
-                  : 'border-white/10 bg-slate-900/80 hover:border-white/20 hover:bg-slate-900'
+                  ? 'border-blue-400 shadow-[0_14px_30px_-22px_rgba(13,110,253,.7)] ring-1 ring-blue-100'
+                  : 'border-slate-200 hover:border-blue-300 hover:shadow-sm'
               }`}
             >
               <button
@@ -146,11 +148,11 @@ export function InterviewModule() {
                 onClick={() => void reveal(item.id)}
                 className="flex w-full items-start gap-4 p-6 text-left"
               >
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/5 bg-slate-800 font-mono text-xs font-bold text-slate-400">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 font-mono text-xs font-bold text-slate-500">
                   #{String(index + 1).padStart(2, '0')}
                 </span>
                 <span className="flex-1">
-                  <span className="block text-base font-bold text-white leading-snug">{item.question}</span>
+                  <span className="block text-base font-bold leading-snug text-slate-950">{item.question}</span>
                   <span className="mt-3 flex flex-wrap gap-2">
                     <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-blue-400">
                       {interviewTopicLabels[item.topic]}
@@ -160,28 +162,28 @@ export function InterviewModule() {
                     </span>
                   </span>
                 </span>
-                <span className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-800/80 px-3.5 py-1.5 text-xs font-bold text-blue-400 transition group-hover:text-cyan-300">
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100">
                   <span>{isOpen ? 'Ẩn đáp án' : 'Xem đáp án'}</span>
                   {isOpen ? <IconChevronUp className="h-3.5 w-3.5" /> : <IconChevronDown className="h-3.5 w-3.5" />}
                 </span>
               </button>
 
               {isOpen && detail ? (
-                <div className="border-t border-white/10 bg-slate-950/60 p-6 sm:px-10">
-                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
-                    <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                      💡 Đáp án gợi ý
+                <div className="border-t border-slate-200 bg-slate-50 p-6 sm:px-10">
+                  <div className="rounded-xl border border-blue-200 bg-white p-5">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
+                      <IconCheckCircle className="h-4 w-4" /> Đáp án gợi ý
                     </p>
-                    <p className="mt-2.5 whitespace-pre-wrap text-xs leading-7 text-slate-200">
+                    <p className="mt-2.5 whitespace-pre-wrap text-sm leading-7 text-slate-700">
                       {detail.answer}
                     </p>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-5">
-                    <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-blue-400">
-                      📖 Giải thích chi tiết
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+                    <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                      <IconBookOpen className="h-4 w-4 text-blue-600" /> Giải thích chi tiết
                     </p>
-                    <p className="mt-2 whitespace-pre-wrap text-xs leading-7 text-slate-300">
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">
                       {detail.explanation}
                     </p>
                   </div>
@@ -193,7 +195,7 @@ export function InterviewModule() {
       </div>
 
       {!loading && !message && questions.length === 0 ? (
-        <div className="mt-6 rounded-3xl border border-dashed border-white/10 bg-slate-900/50 p-12 text-center text-xs font-medium text-slate-400">
+        <div className="ui-state mt-6 text-sm font-medium">
           Không có câu hỏi phù hợp với bộ lọc đã chọn.
         </div>
       ) : null}
@@ -201,7 +203,7 @@ export function InterviewModule() {
       {loading ? (
         <div className="mt-6 space-y-4">
           {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="h-28 animate-pulse rounded-3xl border border-white/5 bg-slate-900/50" />
+            <div key={i} className="ui-skeleton h-28 rounded-[14px] border border-slate-200" />
           ))}
         </div>
       ) : null}
@@ -221,16 +223,16 @@ function Filter({
   options: [string, string][]
 }) {
   return (
-    <label className="flex-1 block text-xs font-bold text-slate-300">
+    <label className="block flex-1 text-sm font-semibold text-slate-700">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950/80 px-3.5 py-2.5 text-xs font-semibold text-white outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+        className="ui-control mt-2 font-semibold"
       >
-        <option value="ALL" className="bg-slate-900 text-white">Tất cả</option>
+        <option value="ALL" className="bg-white text-slate-900">Tất cả</option>
         {options.map(([key, label]) => (
-          <option key={key} value={key} className="bg-slate-900 text-white">
+          <option key={key} value={key} className="bg-white text-slate-900">
             {label}
           </option>
         ))}

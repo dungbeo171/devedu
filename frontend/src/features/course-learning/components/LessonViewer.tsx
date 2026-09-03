@@ -38,18 +38,18 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
   }
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-md sm:p-8">
+    <div className="ui-panel p-6 sm:p-8">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800/60 px-3.5 py-1.5 text-xs font-bold text-slate-300 transition hover:border-white/20 hover:bg-slate-700/60 hover:text-white"
+        className="ui-button-ghost px-0 hover:bg-transparent hover:text-blue-700"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />
         <span>Quay lại khóa học</span>
       </button>
 
       {loading ? (
-        <div className="mt-6 h-72 animate-pulse rounded-2xl border border-white/5 bg-slate-950/60" />
+        <div className="ui-skeleton mt-6 h-72 rounded-xl" />
       ) : null}
 
       {!loading && lesson ? (
@@ -59,12 +59,12 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
               <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-xs font-bold text-blue-400">
                 LESSON {lesson.position}
               </div>
-              <h3 className="mt-2 text-2xl font-black tracking-tight text-white">{lesson.title}</h3>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">{lesson.title}</h1>
             </div>
             <button
               type="button"
               onClick={() => void markComplete()}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-900/30 ring-1 ring-white/20 transition hover:from-emerald-400 hover:to-teal-500"
+              className="ui-button-primary"
             >
               <IconCheck className="h-4 w-4" />
               <span>Đánh dấu đã học</span>
@@ -72,11 +72,11 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
           </div>
 
           {lesson.videoUrl ? (
-            <div className="mt-8 overflow-hidden rounded-2xl border border-white/10 bg-slate-950 shadow-2xl ring-1 ring-white/5">
+            <div className="mt-8 overflow-hidden rounded-xl border border-slate-300 bg-slate-950 shadow-lg">
               <video className="aspect-video w-full bg-black" controls preload="metadata" src={lesson.videoUrl}>
                 Trình duyệt không hỗ trợ phát video này.
               </video>
-              <div className="flex items-center justify-between border-t border-white/10 bg-slate-900/90 px-4 py-2.5 text-xs text-slate-400">
+              <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900 px-4 py-2.5 text-xs text-slate-300">
                 <div className="flex items-center gap-2">
                   <IconPlay className="h-3.5 w-3.5 text-rose-400" />
                   <span>Video bài giảng</span>
@@ -93,18 +93,18 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
               </div>
             </div>
           ) : (
-            <div className="mt-8 rounded-2xl border border-dashed border-white/10 bg-slate-950/40 p-8 text-center text-xs font-medium text-slate-500">
+            <div className="ui-state mt-8 min-h-32 text-sm font-medium">
               Bài học này không có video đính kèm.
             </div>
           )}
 
-          <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-6">
-            <h4 className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">Nội dung bài học</h4>
-            <div className="mt-3 whitespace-pre-line text-xs leading-7 text-slate-300">{lesson.content}</div>
+          <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-6">
+            <h2 className="text-base font-bold text-slate-900">Nội dung bài học</h2>
+            <div className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700">{lesson.content}</div>
           </div>
 
           {message ? (
-            <div className="mt-6 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4 text-xs font-bold text-blue-300">
+            <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
               {message}
             </div>
           ) : null}
@@ -112,7 +112,7 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
       ) : null}
 
       {!loading && !lesson && message ? (
-        <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-xs font-bold text-rose-300">
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-700">
           {message}
         </div>
       ) : null}

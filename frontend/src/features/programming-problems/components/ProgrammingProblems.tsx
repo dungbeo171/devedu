@@ -117,7 +117,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   const pageProblems = visibleProblems.slice(pageStart, pageStart + problemsPerPage)
 
   return (
-    <section className="mx-auto w-full lg:w-4/5 xl:w-3/5">
+    <section className="mx-auto w-full max-w-5xl">
       {/* Toast Notification */}
       {flashMessage ? (
         <div role="status" className="flash-toast fixed right-4 top-20 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-xl border border-blue-700 bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-900/20 sm:right-6 lg:right-10">
@@ -128,33 +128,31 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
         </div>
       ) : null}
 
-      {/* Header Section */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="ui-page-header">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-wider text-blue-700">
+          <div className="ui-kicker">
             <IconCode className="h-3.5 w-3.5" />
-            <span>Practice library</span>
+            <span>Kho luyện tập</span>
           </div>
-          <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">Bài tập lập trình</h2>
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+          <h1 className="ui-page-title mt-2">Bài tập lập trình</h1>
+          <p className="ui-page-description">
             Rèn luyện tư duy thuật toán và kỹ năng code qua các bài tập có hệ thống chấm tự động.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
+        <div className="ui-badge">
           <span className="h-2 w-2 rounded-full bg-blue-500" />
           <span>{loading ? 'Đang tải...' : `${visibleProblems.length} bài tập`}</span>
         </div>
       </div>
 
       {currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN' ? (
-        <a href="/problems/add" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">
+        <a href="/problems/add" className="ui-button-primary mt-5">
           <IconCode className="h-4 w-4" />
           <span>Thêm bài tập</span>
         </a>
       ) : null}
 
-      {/* Filter Toolbar Card */}
-      <div className="relative z-20 mt-6 rounded-3xl border border-blue-100 bg-white p-4 shadow-md shadow-blue-900/10">
+      <div className="ui-panel relative z-20 mt-6 p-4">
         <div className="flex flex-wrap gap-1.5">
           <button type="button" onClick={() => setSelectedTopic(null)} className={filterButtonClass(selectedTopic === null)}>Tất cả</button>
           {topics.map(([topic, label]) => (
@@ -195,16 +193,16 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
         </div>
       </div>
 
-      {error ? <div className="mt-6 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-xs font-bold text-rose-300">{error}</div> : null}
+      {error ? <div role="alert" className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5 text-sm font-semibold text-red-700">{error}</div> : null}
       {!error && loading ? (
         <div className="mt-5 space-y-3">
           {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="h-28 animate-pulse rounded-2xl border border-blue-100 bg-blue-50" />
+            <div key={index} className="ui-skeleton h-24 rounded-xl border border-slate-200" />
           ))}
         </div>
       ) : null}
       {!error && !loading && visibleProblems.length === 0 ? (
-        <div className="mt-5 rounded-3xl border border-dashed border-blue-200 bg-white p-12 text-center text-xs font-medium text-slate-600">
+        <div className="ui-state mt-5 text-sm font-medium">
           Không có bài tập phù hợp với bộ lọc đã chọn.
         </div>
       ) : null}
@@ -297,12 +295,12 @@ function ProblemList({ problems, solvedProblemIds, onSelect, onDelete, startInde
         return (
           <div
             key={problem.id}
-            className="group flex w-full items-stretch rounded-2xl border border-blue-100 bg-white shadow-sm transition-all hover:border-blue-300 hover:shadow-md hover:shadow-blue-500/10"
+            className="group ui-card ui-card-interactive flex w-full items-stretch overflow-hidden"
           >
             <button
               type="button"
               onClick={() => onSelect(problem.slug)}
-              className="flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-2xl p-5 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/30"
+              className="flex min-w-0 flex-1 cursor-pointer items-start gap-4 p-4 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/30 sm:p-5"
             >
               <span
                 className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-xs font-black transition-all ${
@@ -329,8 +327,8 @@ function ProblemList({ problems, solvedProblemIds, onSelect, onDelete, startInde
                     </span>
                   ))}
                 </span>
-                <span className="mt-2.5 block text-base font-bold text-slate-900 transition-colors group-hover:text-blue-700">{problem.title}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-600 line-clamp-2">{problem.summary}</span>
+                <span className="mt-2.5 block text-base font-bold text-slate-950 transition-colors group-hover:text-blue-700">{problem.title}</span>
+                <span className="mt-1 block text-sm leading-6 text-slate-600 line-clamp-2">{problem.summary}</span>
               </span>
 
               <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-600 group-hover:border-blue-300 group-hover:text-blue-700">
@@ -338,7 +336,7 @@ function ProblemList({ problems, solvedProblemIds, onSelect, onDelete, startInde
               </span>
             </button>
             {admin ? (
-              <div className="flex shrink-0 flex-col justify-center gap-2 border-l border-blue-100 px-3">
+              <div className="flex shrink-0 flex-col justify-center gap-2 border-l border-slate-200 bg-slate-50/70 px-3">
                 <a href={`/problems/${encodeURIComponent(problem.slug)}/edit`} className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-center text-[11px] font-bold text-white transition hover:bg-blue-700">Sửa</a>
                 <button type="button" onClick={() => onDelete(problem)} className="cursor-pointer rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 transition hover:bg-red-50">Xóa</button>
               </div>

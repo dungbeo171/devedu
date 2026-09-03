@@ -233,8 +233,8 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
 
   if (loading) {
     return (
-      <div className="grid min-h-96 place-items-center rounded-3xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-md">
-        <div className="flex items-center gap-3 text-xs font-semibold text-slate-400">
+      <div className="ui-panel grid min-h-96 place-items-center p-8">
+        <div className="flex items-center gap-3 text-sm font-semibold text-slate-600">
           <svg className="h-5 w-5 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -247,12 +247,12 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
 
   if (!problem) {
     return (
-      <div className="rounded-3xl border border-rose-500/30 bg-rose-500/10 p-10 text-center">
-        <p className="text-xs font-bold text-rose-300">{message || 'Không tìm thấy bài tập.'}</p>
+      <div className="rounded-[18px] border border-red-200 bg-red-50 p-10 text-center">
+        <p className="text-sm font-semibold text-red-700">{message || 'Không tìm thấy bài tập.'}</p>
         <button
           type="button"
           onClick={onBack}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-blue-600/25 transition hover:from-blue-500 hover:to-indigo-500"
+          className="ui-button-primary mt-5"
         >
           <IconArrowLeft className="h-4 w-4" />
           <span>Quay lại danh sách bài tập</span>
@@ -267,52 +267,52 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
       <button
         type="button"
         onClick={() => void leaveWorkspace()}
-        className="mb-5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/80 px-3.5 py-1.5 text-xs font-bold text-slate-300 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-slate-800 hover:text-white"
+        className="ui-button-ghost mb-5 px-0 hover:bg-transparent hover:text-blue-700"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />
         <span>Danh sách bài tập</span>
       </button>
 
       {/* Main Workspace Frame */}
-      <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-slate-950/90 shadow-2xl shadow-black/60 ring-1 ring-white/5 xl:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.68fr)]">
+      <div className="grid overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] xl:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.68fr)]">
         {/* Problem Statement Pane */}
-        <article className="border-b border-white/10 p-6 sm:p-8 xl:border-r xl:border-b-0">
+        <article className="border-b border-slate-200 bg-white p-6 sm:p-8 xl:border-r xl:border-b-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-blue-400">
               {topicLabels[problem.topic]}
             </span>
             <span className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold ${
               problem.difficulty === 'EASY'
-                ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
                 : problem.difficulty === 'MEDIUM'
-                ? 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
-                : 'border border-rose-500/30 bg-rose-500/10 text-rose-400'
+                ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                : 'border border-red-200 bg-red-50 text-red-700'
             }`}>
               {problem.difficulty === 'EASY' ? 'Dễ' : problem.difficulty === 'MEDIUM' ? 'Trung bình' : 'Khó'}
             </span>
           </div>
 
-          <h3 className="mt-4 text-2xl font-black tracking-tight text-white">{problem.title}</h3>
-          <p className="mt-2 text-xs leading-6 text-slate-400">{problem.summary}</p>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-950">{problem.title}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{problem.summary}</p>
 
-          <div className="my-6 h-px bg-white/10" />
-          <h4 className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-400">Yêu cầu đề bài</h4>
-          <p className="mt-3 whitespace-pre-line text-xs leading-7 text-slate-300">{problem.description}</p>
+          <div className="my-6 h-px bg-slate-200" />
+          <h2 className="text-sm font-bold text-slate-900">Yêu cầu đề bài</h2>
+          <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700">{problem.description}</p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60">
-              <p className="border-b border-white/5 bg-slate-900 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
                 Sample Input
               </p>
-              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-300">
+              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-700">
                 {problem.sampleInput || '(trống)'}
               </pre>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/60">
-              <p className="border-b border-white/5 bg-slate-900 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
                 Sample Output
               </p>
-              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-300">
+              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-700">
                 {problem.sampleOutput || '(trống)'}
               </pre>
             </div>
@@ -370,7 +370,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                 type="button"
                 onClick={() => void submit()}
                 disabled={submitting || running || runningInput || !sourceCode.trim()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-blue-600/25 ring-1 ring-white/20 transition hover:from-blue-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-button-primary min-h-9 px-3 py-1.5"
               >
                 {submitting ? (
                   <>
@@ -492,7 +492,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
           </div>
 
           {message ? (
-            <div aria-live="polite" className="border-t border-white/10 bg-slate-900/90 px-4 py-3 text-xs font-semibold text-amber-300">
+            <div aria-live="polite" className="border-t border-amber-800 bg-amber-950 px-4 py-3 text-xs font-semibold text-amber-200">
               {message}
             </div>
           ) : null}

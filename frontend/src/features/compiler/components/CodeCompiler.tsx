@@ -116,18 +116,24 @@ export function CodeCompiler() {
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white text-slate-900 shadow-xl shadow-blue-900/10">
-      {/* IDE Top Window Bar */}
-      <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <section>
+      <header className="ui-page-header mb-6">
+        <div>
+          <p className="ui-kicker"><IconTerminal className="h-4 w-4" /> Không gian thực hành</p>
+          <h1 className="ui-page-title mt-2">Trình biên dịch trực tuyến</h1>
+          <p className="ui-page-description">Viết, chạy và kiểm tra mã nguồn trong một workspace tập trung.</p>
+        </div>
+      </header>
+      <div className="overflow-hidden rounded-[18px] border border-slate-300 bg-white text-slate-900 shadow-[0_18px_45px_-24px_rgba(15,23,42,.28)]">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          {/* macOS Style Traffic Lights */}
           <div className="flex items-center gap-1.5" aria-hidden="true">
-            <span className="h-3 w-3 rounded-full bg-blue-300" />
-            <span className="h-3 w-3 rounded-full bg-blue-500" />
-            <span className="h-3 w-3 rounded-full bg-blue-700" />
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
           </div>
           <span className="hidden h-4 w-px bg-blue-200 sm:block" />
-          <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-3 py-1 text-xs">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs">
             <IconTerminal className="h-3.5 w-3.5 text-blue-600" />
             <span className="truncate font-mono text-slate-500">
               workspace / <span className="font-semibold text-blue-700">{selectedLanguage.extension}</span>
@@ -143,7 +149,7 @@ export function CodeCompiler() {
               id="language"
               value={language}
               onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}
-              className="appearance-none rounded-xl border border-blue-200 bg-white py-1.5 pl-3.5 pr-8 font-mono text-xs font-bold text-blue-700 outline-none transition hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              className="min-h-10 appearance-none rounded-[10px] border border-slate-300 bg-white py-1.5 pl-3.5 pr-8 font-mono text-xs font-bold text-blue-700 outline-none transition hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
             >
               {languages.map((item) => (
                 <option key={item.value} value={item.value} className="bg-white text-blue-700">
@@ -158,7 +164,7 @@ export function CodeCompiler() {
             type="button"
             onClick={() => void runCode()}
             disabled={!code.trim() || isRunning}
-            className="inline-flex min-w-32 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ui-button-primary min-w-32"
           >
             {isRunning ? (
               <>
@@ -184,7 +190,7 @@ export function CodeCompiler() {
         <div className="flex min-h-[460px] flex-col border-b border-blue-100 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white px-4 py-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-slate-600">Editor</span>
+              <span className="font-mono text-xs font-bold text-slate-600">Mã nguồn</span>
               <span className="rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-bold text-blue-700 ring-1 ring-blue-100">
                 {selectedLanguage.label}
               </span>
@@ -199,7 +205,7 @@ export function CodeCompiler() {
           <div className="flex min-h-0 flex-col border-b border-blue-800">
             <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
               <label className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100" htmlFor="program-input">
-                Standard Input (stdin)
+                Input (stdin)
               </label>
               <span className="font-mono text-[10px] text-blue-200">
                 {input.trim() ? 'tùy chỉnh' : selectedLanguage.defaultInput ? `mẫu: ${selectedLanguage.defaultInput}` : 'trống'}
@@ -222,7 +228,7 @@ export function CodeCompiler() {
             <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50" />
-                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100">Terminal Output</span>
+                <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100">Kết quả</span>
               </div>
             </div>
             <pre
@@ -233,6 +239,7 @@ export function CodeCompiler() {
             </pre>
           </div>
         </div>
+      </div>
       </div>
     </section>
   )

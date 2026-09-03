@@ -24,10 +24,10 @@ export function EditProgrammingProblemPage({ slug }: { slug: string }) {
 
   if (user?.role !== 'ADMIN') {
     return (
-      <section className="mx-auto max-w-xl rounded-3xl border border-blue-100 bg-white p-8 text-center shadow-md shadow-blue-900/10">
+      <section className="ui-panel mx-auto max-w-xl p-8 text-center">
         <h2 className="text-xl font-black text-slate-900">Không có quyền sửa bài tập</h2>
         <p className="mt-2 text-xs leading-6 text-slate-600">Chỉ quản trị viên được sử dụng chức năng này.</p>
-        <a href={user ? '/problems' : '/login'} className="mt-5 inline-flex rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700">
+        <a href={user ? '/problems' : '/login'} className="ui-button-primary mt-5">
           {user ? 'Quay lại bài tập' : 'Đăng nhập'}
         </a>
       </section>
@@ -36,12 +36,12 @@ export function EditProgrammingProblemPage({ slug }: { slug: string }) {
 
   return (
     <section className="mx-auto w-full max-w-4xl">
-      <a href="/problems" className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-3.5 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50">
+      <a href="/problems" className="ui-button-ghost px-0 hover:bg-transparent hover:text-blue-700">
         <IconArrowLeft className="h-4 w-4" />
         <span>Quay lại danh sách bài tập</span>
       </a>
       {error ? <p role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700">{error}</p> : null}
-      {!error && !problem ? <div className="mt-5 h-80 animate-pulse rounded-3xl border border-blue-100 bg-blue-50" /> : null}
+      {!error && !problem ? <div className="ui-skeleton mt-5 h-80 rounded-[18px] border border-slate-200" /> : null}
       {problem ? (
         <ProblemCreator
           standalone

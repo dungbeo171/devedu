@@ -133,7 +133,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700"
+          className="ui-button-primary"
         >
           <IconCode className="h-4 w-4" />
           <span>{open ? 'Đóng form' : 'Thêm bài tập'}</span>
@@ -141,10 +141,10 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
       ) : null}
 
       {open ? (
-        <form onSubmit={(event) => void submit(event)} className={`${standalone ? '' : 'mt-4'} rounded-3xl border border-blue-100 bg-white p-5 shadow-md shadow-blue-900/10 sm:p-6`}>
+        <form onSubmit={(event) => void submit(event)} className={`${standalone ? '' : 'mt-4'} ui-panel p-5 sm:p-7`}>
           <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-black text-slate-900">{initialProblem ? 'Sửa bài tập lập trình' : 'Tạo bài tập lập trình'}</h3>
-            <p className="text-xs text-slate-600">Test case bên dưới được giữ kín và chỉ dùng khi chấm bài.</p>
+            <h1 className="text-2xl font-bold text-slate-950">{initialProblem ? 'Sửa bài tập lập trình' : 'Tạo bài tập lập trình'}</h1>
+            <p className="mt-1 text-sm text-slate-600">Test case bên dưới được giữ kín và chỉ dùng khi chấm bài.</p>
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -184,7 +184,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
             <legend className="text-xs font-bold text-slate-700">Ngôn ngữ được phép</legend>
             <div className="mt-2 flex flex-wrap gap-2">
               {languageOptions.map((option) => (
-                <label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold transition ${allowedLanguages.includes(option.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-blue-100 bg-white text-slate-600 hover:bg-blue-50'}`}>
+                <label key={option.value} className={`cursor-pointer rounded-[10px] border px-3 py-2 text-xs font-bold transition ${allowedLanguages.includes(option.value) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50'}`}>
                   <input type="checkbox" className="sr-only" checked={allowedLanguages.includes(option.value)} onChange={() => toggleLanguage(option.value)} />
                   {option.label}
                 </label>
@@ -220,13 +220,13 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <h4 className="text-sm font-black text-slate-900">Test case ẩn</h4>
-            <button type="button" onClick={() => setTestCases((current) => [...current, emptyTestCase()])} disabled={testCases.length >= 50} className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+            <button type="button" onClick={() => setTestCases((current) => [...current, emptyTestCase()])} disabled={testCases.length >= 50} className="ui-button-secondary">
               + Thêm test case
             </button>
           </div>
           <div className="mt-3 space-y-3">
             {testCases.map((testCase, index) => (
-              <div key={index} className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-blue-700">Test case #{index + 1}</span>
                   {testCases.length > 1 ? <button type="button" onClick={() => setTestCases((current) => current.filter((_, position) => position !== index))} className="text-xs font-bold text-blue-700 hover:underline">Xóa</button> : null}
@@ -247,9 +247,9 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
           </div>
 
           {error ? <p role="alert" className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-bold text-blue-800">{error}</p> : null}
-          <div className="mt-5 flex justify-end gap-2">
-            <button type="button" onClick={() => onCancel ? onCancel() : setOpen(false)} className="rounded-xl border border-blue-100 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-blue-50">Hủy</button>
-            <button type="submit" disabled={submitting} className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+          <div className="mt-6 flex flex-col-reverse justify-end gap-2 border-t border-slate-200 pt-5 sm:flex-row">
+            <button type="button" onClick={() => onCancel ? onCancel() : setOpen(false)} className="ui-button-secondary">Hủy</button>
+            <button type="submit" disabled={submitting} className="ui-button-primary">
               {submitting ? 'Đang lưu...' : initialProblem ? 'Lưu thay đổi' : 'Lưu bài tập'}
             </button>
           </div>
@@ -260,10 +260,10 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
 }
 
 function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: ReactNode }) {
-  return <label className={`block text-xs font-bold text-slate-700 ${wide ? 'sm:col-span-2' : ''}`}>{label}{children}</label>
+  return <label className={`block text-sm font-semibold text-slate-700 ${wide ? 'sm:col-span-2' : ''}`}>{label}{children}</label>
 }
 
-const inputClass = 'mt-1.5 w-full rounded-xl border border-blue-100 bg-white px-3.5 py-2.5 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+const inputClass = 'ui-control mt-2'
 
 function toSlug(value: string) {
   return value
