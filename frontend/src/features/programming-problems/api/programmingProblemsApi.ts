@@ -51,7 +51,7 @@ export async function runProgrammingProblemTests(
     body: JSON.stringify({ language, sourceCode }),
   })
   if (response.status === 401) throw new Error('AUTHENTICATION_REQUIRED')
-  if (response.status === 403) throw new Error('STUDENT_ROLE_REQUIRED')
+  if (response.status === 403) throw new Error('ROLE_REQUIRED')
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { message?: string } | null
     throw new Error(body?.message ?? 'Không thể chạy test case lúc này.')
@@ -228,7 +228,7 @@ export async function submitProgrammingProblem(
     throw new Error('AUTHENTICATION_REQUIRED')
   }
   if (response.status === 403) {
-    throw new Error('STUDENT_ROLE_REQUIRED')
+    throw new Error('ROLE_REQUIRED')
   }
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { message?: string } | null

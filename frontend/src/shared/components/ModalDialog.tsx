@@ -29,15 +29,15 @@ export function ModalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/35 p-0 backdrop-blur-[1px] sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div className={`max-h-[95vh] w-full overflow-y-auto rounded-t-[20px] bg-white shadow-[0_28px_80px_-32px_rgba(15,23,42,.55)] sm:rounded-[20px] ${widthClass}`}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-          <h2 id={titleId} className="text-xl font-bold text-slate-950">{title}</h2>
+      <div className={`max-h-[95vh] w-full overflow-y-auto rounded-t-xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,.18)] sm:rounded-xl ${widthClass}`}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 sm:px-6">
+          <h2 id={titleId} className="text-lg font-semibold text-slate-950">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Đóng" className="ui-button-ghost h-9 min-h-9 w-9 p-0 text-xl">×</button>
         </div>
         {children}

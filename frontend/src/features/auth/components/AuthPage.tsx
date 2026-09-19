@@ -66,7 +66,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               Học, viết code và nâng cao trình độ mỗi ngày.
             </h1>
             <p className="mt-4 text-sm leading-7 text-blue-50">
-              Nền tảng học lập trình toàn diện: từ biên dịch đa ngôn ngữ, luyện thuật toán đến thi cử và phỏng vấn kỹ thuật.
+              Nền tảng học lập trình toàn diện: từ biên dịch đa ngôn ngữ, luyện thuật toán đến lớp học và kỳ thi.
             </p>
 
             <div className="mt-8 space-y-3.5 text-sm text-blue-50">
@@ -80,7 +80,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               </div>
               <div className="flex items-center gap-3">
                 <IconCheckCircle className="h-4 w-4 shrink-0 text-white" />
-                <span>Tham gia kỳ thi và ôn phỏng vấn trực tiếp</span>
+                <span>Tham gia lớp học và kỳ thi trực tuyến</span>
               </div>
             </div>
           </div>

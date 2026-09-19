@@ -76,6 +76,7 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
                 .collect(Collectors.joining(","));
         return new ProgrammingProblemJpaEntity(
                 problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
+                problem.inputDescription(), problem.outputDescription(),
                 problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
                 languages, serializeStarterCodes(problem.starterCodes()), problem.createdAt(), false
         );
@@ -95,6 +96,8 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
                 entity.getTitle(),
                 entity.getSummary(),
                 entity.getDescription(),
+                entity.getInputDescription(),
+                entity.getOutputDescription(),
                 entity.getSampleInput(),
                 entity.getSampleOutput(),
                 entity.getTopic(),

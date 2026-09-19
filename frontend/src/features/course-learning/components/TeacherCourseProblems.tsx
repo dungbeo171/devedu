@@ -3,12 +3,13 @@ import { getProgrammingProblems } from '../../programming-problems/api/programmi
 import type { ProgrammingProblemSummary } from '../../programming-problems/types/programmingProblem'
 import { topicLabels } from '../../programming-problems/types/programmingProblem'
 import { ModalDialog } from '../../../shared/components/ModalDialog'
+import { IconChevronDown, IconSearch } from '../../../shared/components/Icons'
 import { assignTeacherCourseProblem, getTeacherCourseProblems, removeTeacherCourseProblem } from '../api/courseLearningApi'
 import type { CourseProblem, ManagedCourse } from '../types/courseLearning'
 
 const difficultyLabels = { EASY: 'Dễ', MEDIUM: 'Trung bình', HARD: 'Khó' } as const
 
-export function TeacherCourseProblems({ course, onToast }: { course: ManagedCourse; onToast: (message: string) => void }) {
+export function TeacherCourseProblems({ course, onToast }: { course: ManagedCourse; onToast: (message: string, tone?: 'success' | 'error') => void }) {
   const [assigned, setAssigned] = useState<CourseProblem[]>([])
   const [catalog, setCatalog] = useState<ProgrammingProblemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,7 +47,7 @@ export function TeacherCourseProblems({ course, onToast }: { course: ManagedCour
       setAssigned(await assignTeacherCourseProblem(course.id, problem.id))
       onToast('Đã thêm bài tập vào lớp')
     } catch (reason) {
-      onToast(reason instanceof Error ? reason.message : 'Không thể thêm bài tập.')
+      onToast(reason instanceof Error ? reason.message : 'Không thể thêm bài tập.', 'error')
     } finally {
       setBusyId('')
     }
@@ -59,7 +60,7 @@ export function TeacherCourseProblems({ course, onToast }: { course: ManagedCour
       setAssigned(await removeTeacherCourseProblem(course.id, problem.id))
       onToast('Đã gỡ bài tập khỏi lớp')
     } catch (reason) {
-      onToast(reason instanceof Error ? reason.message : 'Không thể gỡ bài tập.')
+      onToast(reason instanceof Error ? reason.message : 'Không thể gỡ bài tập.', 'error')
     } finally {
       setBusyId('')
     }
@@ -105,15 +106,36 @@ export function TeacherCourseProblems({ course, onToast }: { course: ManagedCour
         <ModalDialog title="Thêm bài tập vào lớp" onClose={() => setModalOpen(false)} maxWidth="max-w-2xl">
           <div className="p-5 sm:p-6">
             <p className="mb-4 font-mono text-xs font-bold text-blue-700">{course.code}</p>
-            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm kiếm bài tập..." className="ui-control" />
-            <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
-              {available.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Không còn bài tập phù hợp để thêm.</p> : available.map((problem) => (
-                <div key={problem.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40">
-                  <div className="min-w-0 flex-1"><b className="block truncate text-sm">{problem.title}</b><span className="text-xs text-slate-500">{topicLabels[problem.topic]} · {difficultyLabels[problem.difficulty]}</span></div>
-                  <button type="button" disabled={busyId === problem.id} onClick={() => void assign(problem)} className="ui-button-primary min-h-9 px-3 py-2">Thêm</button>
+            <details className="group">
+              <summary className="ui-control flex cursor-pointer list-none items-center justify-between gap-3 font-semibold hover:border-blue-300 group-open:border-blue-400 group-open:ring-2 group-open:ring-blue-100 [&::-webkit-details-marker]:hidden">
+                <span>Danh sách bài tập</span>
+                <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                  {available.length} bài có thể thêm
+                  <IconChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <div className="mt-2 rounded-xl border border-slate-200 bg-white p-2">
+                <label className="relative block">
+                  <span className="sr-only">Tìm kiếm bài tập</span>
+                  <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Tìm kiếm bài tập..."
+                    className="ui-control ui-control-with-leading-icon pr-3"
+                  />
+                </label>
+                <div className="mt-2 max-h-80 space-y-2 overflow-y-auto">
+                  {available.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">Không còn bài tập phù hợp để thêm.</p> : available.map((problem) => (
+                    <div key={problem.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 transition hover:border-blue-200 hover:bg-blue-50/40">
+                      <div className="min-w-0 flex-1"><b className="block truncate text-sm">{problem.title}</b><span className="text-xs text-slate-500">{topicLabels[problem.topic]} · {difficultyLabels[problem.difficulty]}</span></div>
+                      <button type="button" disabled={busyId === problem.id} onClick={() => void assign(problem)} className="ui-button-primary min-h-9 px-3 py-2">Thêm</button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            </details>
           </div>
         </ModalDialog>
       ) : null}

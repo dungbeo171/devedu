@@ -12,6 +12,8 @@ public record ProgrammingProblem(
         String title,
         String summary,
         String description,
+        String inputDescription,
+        String outputDescription,
         String sampleInput,
         String sampleOutput,
         ProblemTopic topic,
@@ -27,6 +29,8 @@ public record ProgrammingProblem(
         title = requireText(title, "Problem title is required");
         summary = requireText(summary, "Problem summary is required");
         description = requireText(description, "Problem description is required");
+        inputDescription = requireText(inputDescription, "Problem input description is required");
+        outputDescription = requireText(outputDescription, "Problem output description is required");
         sampleInput = sampleInput == null ? "" : sampleInput;
         sampleOutput = sampleOutput == null ? "" : sampleOutput;
         Objects.requireNonNull(topic, "Problem topic is required");

@@ -10,6 +10,7 @@ import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
 import com.devedu.learningplatform.application.port.out.SandboxExecutionPort;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.SubmissionStatus;
+import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
@@ -27,6 +28,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,6 +40,7 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
     private static final int COMPILE_ERROR_EXIT_CODE = 42;
     private final DockerSandboxSettings settings;
     private final Semaphore capacity;
+    private final ExecutorService testExecutor;
 
     public DockerSandboxExecutionAdapter(DockerSandboxSettings settings) {
         this.settings = settings;
@@ -42,6 +48,16 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
             throw new IllegalArgumentException("Judge concurrency must be positive");
         }
         this.capacity = new Semaphore(settings.maxConcurrentExecutions());
+        this.testExecutor = Executors.newFixedThreadPool(settings.maxConcurrentExecutions(), runnable -> {
+            var thread = new Thread(runnable, "judge-test-worker");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void shutdownTestExecutor() {
+        testExecutor.shutdownNow();
     }
 
     @Override
@@ -107,7 +123,7 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
             throw new JudgeUnavailableException("Code judge is at capacity; try again later");
         }
         Path root = null;
-        var started = Instant.now();
+        var requestStarted = Instant.now();
         try {
             Files.createDirectories(settings.workspaceRoot());
             root = Files.createTempDirectory(settings.workspaceRoot(), "devedu-judge-");
@@ -117,64 +133,123 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
             var runner = runner(command.language());
             Files.writeString(sourceDirectory.resolve(runner.fileName()), command.sourceCode(), StandardCharsets.UTF_8);
 
-            if (runner.compileScript() != null) {
+            var compileInsideTest = runner.compileScript() != null
+                    && command.testCases().size() == 1;
+            if (runner.compileScript() != null && !compileInsideTest) {
                 var compilation = runContainer(command.submissionId(), "compile", runner.image(), runner.user(),
                         sourceDirectory, buildDirectory, true, runner.compileScript(), "", settings.compileTimeoutMillis());
-                if (compilation.timedOut()) return compilationFailure(command, "Compilation timed out", started);
+                if (compilation.timedOut()) return compilationFailure(command, "Compilation timed out", requestStarted);
                 ensureInfrastructureAvailable(compilation);
                 if (compilation.exitCode() != 0) return compilationFailure(
-                        command, diagnostic(compilation, "Compilation failed"), started);
+                        command, diagnostic(compilation, "Compilation failed"), requestStarted);
+            }
+
+            var executionStarted = Instant.now();
+            var executions = new ArrayList<Future<EvaluatedTestCase>>();
+            for (var testCase : command.testCases()) {
+                final TestExecutionPlan plan;
+                if (compileInsideTest) {
+                    var testBuildDirectory = Files.createDirectory(buildDirectory.resolve("test-" + testCase.position()));
+                    makeContainerWritable(testBuildDirectory);
+                    var script = runner.compileScript()
+                            + " && touch /build/.compiled || exit " + COMPILE_ERROR_EXIT_CODE
+                            + "; " + runner.runScript();
+                    plan = new TestExecutionPlan(testBuildDirectory, true, script, true);
+                } else {
+                    plan = new TestExecutionPlan(buildDirectory, false, runner.runScript(), false);
+                }
+                executions.add(testExecutor.submit(
+                        () -> executeTestCase(command, runner, sourceDirectory, plan, testCase)));
             }
 
             var passed = 0;
             var testResults = new ArrayList<JudgeTestCaseResult>();
             var overallStatus = SubmissionStatus.ACCEPTED;
             var overallDiagnostic = "All test cases passed";
-            for (var testCase : command.testCases()) {
-                var timeout = testCase.timeLimitMillis() + (command.language() == CodeLanguage.MYSQL
-                        ? settings.mysqlStartupGraceMillis() : settings.startupGraceMillis());
-                var execution = runContainer(command.submissionId(), "test-" + testCase.position(), runner.image(),
-                        runner.user(), sourceDirectory, buildDirectory, false, runner.runScript(), testCase.input(), timeout);
-                SubmissionStatus testStatus;
-                String testDiagnostic;
-                if (execution.timedOut()) {
-                    testStatus = SubmissionStatus.TIME_LIMIT;
-                    testDiagnostic = "Time limit exceeded on test " + testCase.position();
-                } else {
-                    ensureInfrastructureAvailable(execution);
-                    if (execution.outputExceeded()) {
-                        testStatus = SubmissionStatus.RUNTIME_ERROR;
-                        testDiagnostic = "Output limit exceeded on test " + testCase.position();
-                    } else if (execution.exitCode() == COMPILE_ERROR_EXIT_CODE) {
-                        testStatus = SubmissionStatus.COMPILE_ERROR;
-                        testDiagnostic = diagnostic(execution, "Compilation failed");
-                    } else if (execution.exitCode() != 0) {
-                        testStatus = SubmissionStatus.RUNTIME_ERROR;
-                        testDiagnostic = diagnostic(execution, "Runtime error on test " + testCase.position());
-                    } else if (!normalize(execution.stdout()).equals(normalize(testCase.expectedOutput()))) {
-                        testStatus = SubmissionStatus.WRONG_ANSWER;
-                        testDiagnostic = "Wrong answer on test " + testCase.position();
-                    } else {
-                        testStatus = SubmissionStatus.ACCEPTED;
-                        testDiagnostic = "Test " + testCase.position() + " passed";
-                    }
-                }
-
-                var testPassed = testStatus == SubmissionStatus.ACCEPTED;
-                testResults.add(new JudgeTestCaseResult(testCase.position(), testPassed, testStatus));
-                if (testPassed) {
+            for (var execution : executions) {
+                var evaluated = awaitTestCase(execution);
+                testResults.add(evaluated.result());
+                if (evaluated.result().passed()) {
                     passed++;
                 } else if (overallStatus == SubmissionStatus.ACCEPTED) {
-                    overallStatus = testStatus;
-                    overallDiagnostic = testDiagnostic;
+                    overallStatus = evaluated.result().status();
+                    overallDiagnostic = evaluated.diagnostic();
                 }
             }
-            return result(overallStatus, overallDiagnostic, passed, command.testCases().size(), started, testResults);
+            return result(overallStatus, overallDiagnostic, passed, command.testCases().size(), executionStarted, testResults);
         } catch (IOException exception) {
             throw new JudgeUnavailableException("Code judge is unavailable", exception);
         } finally {
             deleteWorkspace(root);
             capacity.release();
+        }
+    }
+
+    private EvaluatedTestCase executeTestCase(
+            JudgeSubmissionCommand command,
+            Runner runner,
+            Path sourceDirectory,
+            TestExecutionPlan plan,
+            com.devedu.learningplatform.domain.model.ProblemTestCase testCase
+    ) throws IOException {
+        var timeout = testCase.timeLimitMillis() + (command.language() == CodeLanguage.MYSQL
+                ? settings.mysqlStartupGraceMillis() : settings.startupGraceMillis());
+        if (plan.includesCompilation()) {
+            timeout += settings.compileTimeoutMillis();
+        }
+        var execution = runContainer(command.submissionId(), "test-" + testCase.position(), runner.image(),
+                runner.user(), sourceDirectory, plan.buildDirectory(), plan.buildWritable(), plan.script(),
+                testCase.input(), timeout);
+        SubmissionStatus status;
+        String testDiagnostic;
+        if (execution.timedOut()) {
+            if (plan.includesCompilation() && !Files.exists(plan.buildDirectory().resolve(".compiled"))) {
+                status = SubmissionStatus.COMPILE_ERROR;
+                testDiagnostic = "Compilation timed out";
+            } else {
+                status = SubmissionStatus.TIME_LIMIT;
+                testDiagnostic = "Time limit exceeded on test " + testCase.position();
+            }
+        } else {
+            ensureInfrastructureAvailable(execution);
+            if (execution.exitCode() == COMPILE_ERROR_EXIT_CODE) {
+                status = SubmissionStatus.COMPILE_ERROR;
+                testDiagnostic = diagnostic(execution, "Compilation failed");
+            } else if (execution.outputExceeded()) {
+                status = SubmissionStatus.RUNTIME_ERROR;
+                testDiagnostic = "Output limit exceeded on test " + testCase.position();
+            } else if (execution.exitCode() != 0) {
+                status = SubmissionStatus.RUNTIME_ERROR;
+                testDiagnostic = diagnostic(execution, "Runtime error on test " + testCase.position());
+            } else if (!normalize(execution.stdout()).equals(normalize(testCase.expectedOutput()))) {
+                status = SubmissionStatus.WRONG_ANSWER;
+                testDiagnostic = "Wrong answer on test " + testCase.position();
+            } else {
+                status = SubmissionStatus.ACCEPTED;
+                testDiagnostic = "Test " + testCase.position() + " passed";
+            }
+        }
+        return new EvaluatedTestCase(
+                new JudgeTestCaseResult(
+                        testCase.position(),
+                        status == SubmissionStatus.ACCEPTED,
+                        status,
+                        testCase.position() == 1 ? execution.stdout() : null
+                ),
+                testDiagnostic
+        );
+    }
+
+    private EvaluatedTestCase awaitTestCase(Future<EvaluatedTestCase> execution) {
+        try {
+            return execution.get();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new JudgeUnavailableException("Code judge was interrupted", exception);
+        } catch (ExecutionException exception) {
+            var cause = exception.getCause();
+            if (cause instanceof JudgeUnavailableException unavailable) throw unavailable;
+            throw new JudgeUnavailableException("Code judge is unavailable", cause);
         }
     }
 
@@ -187,8 +262,8 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
                     "javac -encoding UTF-8 -d /build /workspace/Main.java",
                     "exec java -Xms16m -Xmx128m -XX:ActiveProcessorCount=1 -cp /build Main");
             case PYTHON -> new Runner(settings.pythonImage(), "main.py", "65534:65534",
-                    "PYTHONPYCACHEPREFIX=/tmp/pycache python -m py_compile /workspace/main.py",
-                    "exec python -B /workspace/main.py");
+                    "python -c \"import py_compile; py_compile.compile('/workspace/main.py', cfile='/build/main.pyc', doraise=True)\"",
+                    "exec python -B /build/main.pyc");
             case HTML -> new Runner(settings.htmlImage(), "index.html", "65534:65534", null,
                     "cat /workspace/index.html");
             case MYSQL -> new Runner(settings.mysqlImage(), "query.sql", "999:999", null,
@@ -311,7 +386,7 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
     private JudgeResult compilationFailure(JudgeSubmissionCommand command, String diagnostic, Instant started) {
         var testResults = command.testCases().stream()
                 .map(testCase -> new JudgeTestCaseResult(
-                        testCase.position(), false, SubmissionStatus.COMPILE_ERROR))
+                        testCase.position(), false, SubmissionStatus.COMPILE_ERROR, null))
                 .toList();
         return result(SubmissionStatus.COMPILE_ERROR, diagnostic, 0, command.testCases().size(), started, testResults);
     }
@@ -358,6 +433,10 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
     }
 
     private record Runner(String image, String fileName, String user, String compileScript, String runScript) {}
+
+    private record TestExecutionPlan(Path buildDirectory, boolean buildWritable, String script,
+                                     boolean includesCompilation) {}
+    private record EvaluatedTestCase(JudgeTestCaseResult result, String diagnostic) {}
     private record ProcessResult(int exitCode, boolean timedOut, String stdout, String stderr, boolean outputExceeded) {}
 
     private static final class CapturedStream implements Runnable {

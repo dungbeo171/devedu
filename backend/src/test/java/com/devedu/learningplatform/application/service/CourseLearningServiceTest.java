@@ -11,6 +11,8 @@ import com.devedu.learningplatform.application.port.in.command.UploadCourseMater
 import com.devedu.learningplatform.application.port.in.command.AccessCourseMaterialsCommand;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseCommand;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseStudentsCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateCourseCommand;
+import com.devedu.learningplatform.application.port.in.command.DeleteCourseCommand;
 import com.devedu.learningplatform.application.port.out.CourseRepository;
 import com.devedu.learningplatform.application.port.out.CourseTopicRepository;
 import com.devedu.learningplatform.application.port.out.LessonProgressRepository;
@@ -49,6 +51,7 @@ class CourseLearningServiceTest {
     private static final UUID TEACHER = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID OTHER_TEACHER = UUID.fromString("20000000-0000-0000-0000-000000000002");
     private static final UUID STUDENT = UUID.fromString("20000000-0000-0000-0000-000000000003");
+    private static final UUID ADMIN = UUID.fromString("20000000-0000-0000-0000-000000000004");
 
     private final TestCourseRepository courseRepository = new TestCourseRepository();
     private final TestTopicRepository topicRepository = new TestTopicRepository();
@@ -179,6 +182,40 @@ class CourseLearningServiceTest {
         assertThat(removed).isEmpty();
     }
 
+    @Test
+    void administratorCanUpdateAndDeleteCourse() {
+        var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-admin", "Java Admin", "Mô tả cũ"));
+        var material = service.uploadMaterial(new UploadCourseMaterialCommand(
+                TEACHER, UserRole.TEACHER, course.id(), "Slide", "slide.pdf", new byte[]{1, 2, 3}));
+
+        var updated = service.updateCourse(new UpdateCourseCommand(
+                ADMIN, UserRole.ADMIN, course.id(), "java-admin-2026", "Java Admin 2026", "Mô tả mới",
+                LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 31)
+        ));
+
+        assertThat(updated.slug()).isEqualTo("java-admin-2026");
+        assertThat(updated.title()).isEqualTo("Java Admin 2026");
+
+        service.deleteCourse(new DeleteCourseCommand(ADMIN, UserRole.ADMIN, course.id()));
+
+        assertThat(courseRepository.findById(course.id())).isEmpty();
+        assertThat(fileStorage.files).doesNotContainKey(material.storageKey());
+    }
+
+    @Test
+    void teacherCannotUseAdministratorCourseActions() {
+        var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
+                "java-admin", "Java Admin", ""));
+
+        assertThatThrownBy(() -> service.updateCourse(new UpdateCourseCommand(
+                TEACHER, UserRole.TEACHER, course.id(), "java-admin", "Đổi tên", "", null, null
+        ))).isInstanceOf(CourseManagementForbiddenException.class);
+        assertThatThrownBy(() -> service.deleteCourse(new DeleteCourseCommand(
+                TEACHER, UserRole.TEACHER, course.id()
+        ))).isInstanceOf(CourseManagementForbiddenException.class);
+    }
+
     private Lesson createLesson() {
         var course = service.createCourse(new CreateCourseCommand(TEACHER, UserRole.TEACHER,
                 "java-core", "Java Core", "Java nền tảng"));
@@ -195,6 +232,7 @@ class CourseLearningServiceTest {
         @Override public List<Course> findAll() { return courses.values().stream().sorted(Comparator.comparing(Course::title)).toList(); }
         @Override public Optional<Course> findById(UUID id) { return Optional.ofNullable(courses.get(id)); }
         @Override public Optional<Course> findBySlug(String slug) { return courses.values().stream().filter(c -> c.slug().equals(slug)).findFirst(); }
+        @Override public void deleteById(UUID id) { courses.remove(id); }
     }
 
     private static final class TestTopicRepository implements CourseTopicRepository {

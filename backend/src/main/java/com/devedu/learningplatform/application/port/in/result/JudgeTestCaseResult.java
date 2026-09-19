@@ -5,6 +5,7 @@ import com.devedu.learningplatform.domain.model.SubmissionStatus;
 public record JudgeTestCaseResult(
         int position,
         boolean passed,
-        SubmissionStatus status
+        SubmissionStatus status,
+        String actualOutput
 ) {
 }

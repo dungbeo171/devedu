@@ -1,4 +1,4 @@
-import type { CourseDetail, CourseSummary, CourseMaterial, CourseProblem, CourseStudent, CourseStudentCandidate, Lesson, LessonProgress, ManagedCourse, StudentCourse, StudentCourseDetails } from '../types/courseLearning'
+import type { CourseDetail, CourseSummary, CourseMaterial, CourseProblem, CourseStudent, CourseStudentCandidate, CourseStudentProgress, Lesson, LessonProgress, ManagedCourse, StudentCourse, StudentCourseDetails } from '../types/courseLearning'
 
 function accessToken(): string {
   const token = localStorage.getItem('devedu.accessToken') ?? localStorage.getItem('accessToken')
@@ -47,6 +47,18 @@ async function teacherRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!response.ok) return parseError(response, 'Không thể lưu nội dung khóa học.')
+  if (response.status === 204) return undefined as T
+  return response.json() as Promise<T>
+}
+
+async function adminCourseRequest<T>(path: string, method: 'PUT' | 'DELETE', body?: object): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken()}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!response.ok) return parseError(response, 'Không thể cập nhật lớp học.')
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -55,6 +67,12 @@ export const createCourse = (body: { slug: string; title: string; description: s
 
 export const getManagedCourses = () =>
   teacherRequest<ManagedCourse[]>('/api/teacher/courses', 'GET')
+
+export const updateManagedCourse = (courseId: string, body: { slug: string; title: string; description: string; startDate: string | null; endDate: string | null }) =>
+  adminCourseRequest<CourseSummary>(`/api/admin/courses/${encodeURIComponent(courseId)}`, 'PUT', body)
+
+export const deleteManagedCourse = (courseId: string) =>
+  adminCourseRequest<void>(`/api/admin/courses/${encodeURIComponent(courseId)}`, 'DELETE')
 
 export const createTopic = (courseId: string, body: { title: string; position: number }) =>
   teacherRequest<{ id: string }>(`/api/teacher/courses/${courseId}/topics`, 'POST', body)
@@ -85,6 +103,9 @@ export const updateCourseStudent = (courseId: string, studentId: number, display
 
 export const getTeacherCourseProblems = (courseId: string) =>
   teacherRequest<CourseProblem[]>(`/api/teacher/courses/${courseId}/problems`, 'GET')
+
+export const getTeacherCourseStudentProgress = (courseId: string) =>
+  teacherRequest<CourseStudentProgress[]>(`/api/teacher/courses/${courseId}/student-progress`, 'GET')
 
 export const assignTeacherCourseProblem = (courseId: string, problemId: string) =>
   teacherRequest<CourseProblem[]>(`/api/teacher/courses/${courseId}/problems`, 'POST', { problemId })

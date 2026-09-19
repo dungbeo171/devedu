@@ -29,6 +29,8 @@ public class TeacherProgrammingProblemsController {
                 request.title(),
                 request.summary(),
                 request.description(),
+                request.inputDescription(),
+                request.outputDescription(),
                 request.sampleInput(),
                 request.sampleOutput(),
                 request.topic(),
@@ -42,6 +44,7 @@ public class TeacherProgrammingProblemsController {
         ));
         return ResponseEntity.status(HttpStatus.CREATED).body(new ProgrammingProblemDetailResponse(
                 problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
+                problem.inputDescription(), problem.outputDescription(),
                 problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
                 problem.allowedLanguages(), problem.starterCodes(), problem.createdAt()
         ));

@@ -63,6 +63,11 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public List<User> findAllByIds(List<UUID> ids) {
+        return repository.findAllById(ids).stream().map(this::toDomain).toList();
+    }
+
+    @Override
     public List<User> searchStudents(String query, int limit) {
         var normalized = query == null ? "" : query.trim();
         var users = new java.util.LinkedHashMap<UUID, User>();

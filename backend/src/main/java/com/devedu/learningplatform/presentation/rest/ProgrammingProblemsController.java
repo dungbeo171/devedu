@@ -7,7 +7,7 @@ import com.devedu.learningplatform.application.security.AuthenticatedUser;
 import com.devedu.learningplatform.domain.model.ProblemTopic;
 import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
-import com.devedu.learningplatform.domain.model.ProgrammingProblem;
+import com.devedu.learningplatform.application.port.in.result.ProgrammingProblemListItem;
 import com.devedu.learningplatform.presentation.rest.dto.ProblemSubmissionResponse;
 import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemDetailResponse;
 import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemSummaryResponse;
@@ -56,6 +56,8 @@ public class ProgrammingProblemsController {
                 problem.title(),
                 problem.summary(),
                 problem.description(),
+                problem.inputDescription(),
+                problem.outputDescription(),
                 problem.sampleInput(),
                 problem.sampleOutput(),
                 problem.topic(),
@@ -104,12 +106,14 @@ public class ProgrammingProblemsController {
                 result.executionTimeMillis(),
                 result.testCases().stream()
                         .map(testCase -> new ProblemTestCaseResultResponse(
-                                testCase.position(), testCase.passed(), testCase.status()))
+                                testCase.position(), testCase.passed(), testCase.status(),
+                                testCase.position() == 1 ? testCase.actualOutput() : null))
                         .toList()
         );
     }
 
-    private ProgrammingProblemSummaryResponse toSummaryResponse(ProgrammingProblem problem) {
+    private ProgrammingProblemSummaryResponse toSummaryResponse(ProgrammingProblemListItem item) {
+        var problem = item.problem();
         return new ProgrammingProblemSummaryResponse(
                 problem.id(),
                 problem.slug(),
@@ -117,7 +121,8 @@ public class ProgrammingProblemsController {
                 problem.summary(),
                 problem.topic(),
                 problem.difficulty(),
-                problem.allowedLanguages()
+                problem.allowedLanguages(),
+                item.acceptanceRate()
         );
     }
 }

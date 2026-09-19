@@ -21,6 +21,8 @@ const languageOptions: { value: SubmissionLanguage; label: string }[] = [
   { value: 'MYSQL', label: 'MySQL' },
 ]
 const emptyTestCase = (): CreateProblemTestCase => ({ input: '', expectedOutput: '', timeLimitMillis: 1000 })
+const minimumTestCases = () => [emptyTestCase(), emptyTestCase(), emptyTestCase()]
+const SQL_INPUT_DESCRIPTION = 'Không có dữ liệu đầu vào từ stdin. Các câu lệnh tạo bảng và dữ liệu mẫu sẽ được đặt sẵn trong code.'
 
 export function ProblemCreator({ onCreated, standalone = false, onCancel, initialProblem }: {
   onCreated: (problem: ProgrammingProblemDetail) => void
@@ -34,7 +36,13 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
   const [slugEdited, setSlugEdited] = useState(Boolean(initialProblem))
   const [summary, setSummary] = useState(initialProblem?.summary ?? '')
   const [description, setDescription] = useState(initialProblem?.description ?? '')
-  const [sampleInput, setSampleInput] = useState(initialProblem?.sampleInput ?? '')
+  const [inputDescription, setInputDescription] = useState(initialProblem?.inputDescription ?? '')
+  const [outputDescription, setOutputDescription] = useState(initialProblem?.outputDescription ?? '')
+  const [sampleInput, setSampleInput] = useState(
+    initialProblem?.topic === 'SQL'
+      ? (initialProblem.testCases[0]?.input ?? '')
+      : (initialProblem?.sampleInput ?? ''),
+  )
   const [sampleOutput, setSampleOutput] = useState(initialProblem?.sampleOutput ?? '')
   const [topic, setTopic] = useState<ProblemTopic>(initialProblem?.topic ?? 'INTRODUCTION')
   const [difficulty, setDifficulty] = useState<ProblemDifficulty>(initialProblem?.difficulty ?? 'EASY')
@@ -48,7 +56,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
     initialProblem ? [...initialProblem.allowedLanguages] : [],
   )
   const [testCases, setTestCases] = useState<CreateProblemTestCase[]>(
-    initialProblem ? initialProblem.testCases.map((testCase) => ({ ...testCase })) : [emptyTestCase()],
+    initialProblem ? initialProblem.testCases.map((testCase) => ({ ...testCase })) : minimumTestCases(),
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -64,6 +72,16 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
           : createStarterCode(language, value),
       ]),
     ))
+  }
+
+  function changeTopic(nextTopic: ProblemTopic) {
+    setTopic(nextTopic)
+    if (nextTopic !== 'SQL') return
+    setInputDescription(SQL_INPUT_DESCRIPTION)
+    setAllowedLanguages(['MYSQL'])
+    setStarterCodes((current) => ({
+      MYSQL: current.MYSQL ?? createStarterCode('MYSQL', title),
+    }))
   }
 
   function toggleLanguage(language: SubmissionLanguage) {
@@ -89,10 +107,14 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
       setError('Chọn ít nhất một ngôn ngữ được phép.')
       return
     }
+    if (testCases.length < 3) {
+      setError('Mỗi bài tập phải có ít nhất 3 test case ẩn.')
+      return
+    }
     setSubmitting(true)
     try {
       const request = {
-        slug, title, summary, description, sampleInput, sampleOutput,
+        slug, title, summary, description, inputDescription, outputDescription, sampleInput, sampleOutput,
         topic, difficulty, allowedLanguages,
         starterCodes: Object.fromEntries(allowedLanguages.map((language) => [language, starterCodes[language] ?? ''])),
         testCases,
@@ -116,6 +138,8 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
     setSlugEdited(false)
     setSummary('')
     setDescription('')
+    setInputDescription('')
+    setOutputDescription('')
     setSampleInput('')
     setSampleOutput('')
     setTopic('INTRODUCTION')
@@ -123,7 +147,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
     setAllowedLanguages(['CPP'])
     setStarterCodes({ CPP: createStarterCode('CPP', '') })
     setEditedStarterLanguages([])
-    setTestCases([emptyTestCase()])
+    setTestCases(minimumTestCases())
     setError('')
   }
 
@@ -155,7 +179,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
               <input required maxLength={120} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={slug} onChange={(event) => { setSlugEdited(true); setSlug(event.target.value.toLowerCase()) }} className={inputClass} />
             </Field>
             <Field label="Chủ đề">
-              <select value={topic} onChange={(event) => setTopic(event.target.value as ProblemTopic)} className={inputClass}>
+              <select value={topic} onChange={(event) => changeTopic(event.target.value as ProblemTopic)} className={inputClass}>
                 {topics.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </Field>
@@ -172,11 +196,31 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
             <Field label="Đề bài" wide>
               <textarea required maxLength={50000} rows={6} value={description} onChange={(event) => setDescription(event.target.value)} className={inputClass} />
             </Field>
-            <Field label="Sample Input">
-              <textarea rows={4} value={sampleInput} onChange={(event) => setSampleInput(event.target.value)} className={`${inputClass} font-mono`} />
+            {topic === 'SQL' ? (
+              <Field label="Dữ liệu đầu vào" wide>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
+                  Bài SQL không nhận input từ bàn phím. Phần tạo bảng và dữ liệu mẫu bên dưới sẽ được đặt sẵn trong code.
+                </div>
+              </Field>
+            ) : (
+              <Field label="Yêu cầu Input" wide>
+                <textarea required maxLength={50000} rows={6} value={inputDescription} onChange={(event) => setInputDescription(event.target.value)} className={inputClass} placeholder="Mô tả dữ liệu đầu vào, định dạng và giới hạn..." />
+              </Field>
+            )}
+            <Field label="Yêu cầu Output" wide>
+              <textarea required maxLength={50000} rows={6} value={outputDescription} onChange={(event) => setOutputDescription(event.target.value)} className={inputClass} placeholder="Mô tả kết quả cần in và định dạng output..." />
             </Field>
-            <Field label="Sample Output">
-              <textarea rows={4} value={sampleOutput} onChange={(event) => setSampleOutput(event.target.value)} className={`${inputClass} font-mono`} />
+            <Field label={topic === 'SQL' ? 'Câu lệnh tạo bảng và dữ liệu mẫu' : 'Input mẫu'} wide>
+              <textarea
+                rows={6}
+                value={sampleInput}
+                onChange={(event) => setSampleInput(event.target.value)}
+                className={`${inputClass} font-mono`}
+                placeholder={topic === 'SQL' ? 'CREATE TABLE ...;\nINSERT INTO ...;' : 'Ví dụ dữ liệu đầu vào'}
+              />
+            </Field>
+            <Field label="Output mẫu" wide>
+              <textarea rows={6} value={sampleOutput} onChange={(event) => setSampleOutput(event.target.value)} className={`${inputClass} font-mono`} placeholder="Kết quả tương ứng với input mẫu" />
             </Field>
           </div>
 
@@ -219,7 +263,10 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
           </fieldset>
 
           <div className="mt-6 flex items-center justify-between gap-3">
-            <h4 className="text-sm font-black text-slate-900">Test case ẩn</h4>
+            <div>
+              <h4 className="text-sm font-black text-slate-900">Test case ẩn</h4>
+              <p className="mt-1 text-xs text-slate-500">Mỗi bài cần từ 3 đến 50 test case.</p>
+            </div>
             <button type="button" onClick={() => setTestCases((current) => [...current, emptyTestCase()])} disabled={testCases.length >= 50} className="ui-button-secondary">
               + Thêm test case
             </button>
@@ -229,7 +276,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
               <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-blue-700">Test case #{index + 1}</span>
-                  {testCases.length > 1 ? <button type="button" onClick={() => setTestCases((current) => current.filter((_, position) => position !== index))} className="text-xs font-bold text-blue-700 hover:underline">Xóa</button> : null}
+                  {testCases.length > 3 ? <button type="button" onClick={() => setTestCases((current) => current.filter((_, position) => position !== index))} className="text-xs font-bold text-blue-700 hover:underline">Xóa</button> : null}
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Field label="Input">

@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { CodeCompiler } from '../features/compiler/components/CodeCompiler'
 import { CourseLearning } from '../features/course-learning/components/CourseLearning'
 import { ExamModule } from '../features/exam/components/ExamModule'
-import { InterviewModule } from '../features/interview/components/InterviewModule'
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
 import { AddProgrammingProblemPage } from '../features/programming-problems/components/AddProgrammingProblemPage'
 import { EditProgrammingProblemPage } from '../features/programming-problems/components/EditProgrammingProblemPage'
@@ -19,7 +18,6 @@ import {
   IconCode,
   IconLogOut,
   IconShield,
-  IconSparkles,
   IconTerminal,
   IconTrophy,
 } from '../shared/components/Icons'
@@ -37,7 +35,6 @@ const navigationRoutes: RouteDefinition[] = [
   { path: '/problems', label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems />, icon: IconCode },
   { path: '/courses', label: 'Lớp học', title: 'Lớp học · DevEdu', content: <CourseLearning />, icon: IconBookOpen },
   { path: '/exams', label: 'Kỳ thi', title: 'Kỳ thi · DevEdu', content: <ExamModule />, icon: IconTrophy },
-  { path: '/interview', label: 'Phỏng vấn', title: 'Phỏng vấn · DevEdu', content: <InterviewModule />, icon: IconSparkles },
 ]
 
 const adminRoute: RouteDefinition = {
@@ -85,11 +82,18 @@ export function App() {
   }, [route])
 
   return (
-    <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-[#f7f9fc] font-sans text-slate-900 antialiased">
+    <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-white font-sans text-slate-900 antialiased">
       <FlashToast message={flashMessage} onDismiss={() => setFlashMessage('')} />
       <SiteHeader pathname={pathname} />
-      <main className="w-full flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
-        <div key={pathname} className="page-enter mx-auto w-full max-w-[1440px]">
+      <main className="w-full flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        <div
+          key={pathname}
+          className={`page-enter mx-auto w-full ${
+            pathname === '/' || pathname === '/problems' || pathname.startsWith('/problems/')
+              ? 'lg:w-[90vw] lg:max-w-[90vw]'
+              : 'max-w-[1180px]'
+          }`}
+        >
           {route?.content ?? <NotFoundPage />}
         </div>
       </main>
@@ -131,50 +135,46 @@ function SiteHeader({ pathname }: { pathname: string }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-blue-700 bg-[#0d6efd] text-white shadow-[0_6px_24px_-16px_rgba(8,66,152,.9)]">
-      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <a className="group flex shrink-0 items-center gap-2.5 font-bold tracking-tight" href="/" aria-label="DevEdu - Trình biên dịch">
-          <span className="relative grid h-9 w-9 place-items-center rounded-[10px] bg-white font-mono text-sm font-black text-blue-600 shadow-sm transition-transform duration-200 group-hover:-rotate-3 group-hover:scale-105">
-            <IconCode className="h-5 w-5 text-blue-600" />
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 text-slate-700 backdrop-blur-md">
+      <div className="mx-auto flex h-13 w-full max-w-[1180px] items-center gap-7 px-4 sm:px-6 lg:px-8">
+        <a className="group flex shrink-0 items-center gap-2 font-bold tracking-tight" href="/" aria-label="DevEdu - Trình biên dịch">
+          <span className="relative grid h-8 w-8 place-items-center rounded-md border border-blue-200 bg-blue-50 font-mono text-sm font-black text-blue-600 transition duration-200 group-hover:-rotate-3 group-hover:border-blue-400 group-hover:bg-blue-100">
+            <IconCode className="h-[18px] w-[18px] text-blue-600" />
           </span>
-          <span className="font-display text-xl font-bold tracking-[-0.035em] text-white">DevEdu</span>
+          <span className="font-display text-[17px] font-semibold tracking-[-0.025em] text-slate-950">DevEdu</span>
         </a>
 
-        {/* Center Navigation Bar */}
-        <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex" aria-label="Điều hướng chính">
+        <nav className="hidden min-w-0 flex-1 items-stretch gap-1 lg:flex" aria-label="Điều hướng chính">
           {visibleNavigationRoutes.map((item) => {
             const active = pathname === item.path || (item.path === '/problems' && pathname.startsWith('/problems/'))
-            const Icon = item.icon
             return (
               <a
                 key={item.path}
                 href={item.path}
                 aria-current={active ? 'page' : undefined}
-                className={`group flex min-h-10 items-center gap-2 rounded-[10px] px-3.5 text-[13px] font-semibold transition-all ${
+                className={`relative flex min-h-13 items-center px-3 text-[13px] font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition-transform ${
                   active
-                    ? 'bg-white text-blue-700 shadow-sm'
-                    : 'text-blue-50 hover:bg-blue-700/70 hover:text-white'
+                    ? 'text-blue-600 after:scale-x-100 after:bg-blue-600'
+                    : 'text-slate-600 after:scale-x-0 after:bg-blue-600 hover:text-slate-950'
                 }`}
               >
-                <Icon className={`h-3.5 w-3.5 transition-transform group-hover:scale-110 ${active ? 'text-blue-700' : 'text-blue-100 group-hover:text-white'}`} />
                 <span>{item.label}</span>
               </a>
             )
           })}
         </nav>
 
-        {/* Right User & Actions */}
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
           {user ? (
             <details className="group relative">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2.5 rounded-[10px] border border-white/25 bg-blue-700/35 px-2.5 shadow-sm transition hover:bg-blue-700/65 [&::-webkit-details-marker]:hidden">
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-xs font-bold text-blue-700 shadow-sm">
+              <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-2 transition hover:bg-slate-100 [&::-webkit-details-marker]:hidden">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-slate-200 text-[11px] font-bold text-slate-600 ring-1 ring-white">
                   {avatarInitial(user.name)}
                 </span>
-                <span className="hidden max-w-36 truncate text-xs font-semibold text-white sm:block">{user.name}</span>
-                <IconChevronDown className="h-3.5 w-3.5 text-blue-100 transition-transform duration-200 group-open:rotate-180" />
+                <span className="hidden max-w-32 truncate text-xs font-medium text-slate-700 sm:block">{user.name}</span>
+                <IconChevronDown className="h-3 w-3 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
               </summary>
-              <div className="absolute right-0 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-2 text-slate-900 shadow-[0_18px_45px_-18px_rgba(15,23,42,.35)]">
+              <div className="absolute right-0 mt-2 w-60 rounded-lg border border-slate-200 bg-white p-2 text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,.12)]">
                 <div className="px-3 py-2.5">
                   <p className="truncate text-xs font-bold text-slate-900">{user.name}</p>
                   <div className="mt-1 flex items-center gap-1.5">
@@ -189,11 +189,11 @@ function SiteHeader({ pathname }: { pathname: string }) {
                       : `ID: ${user.publicId ?? '—'}${user.studentCode ? ` · ${user.studentCode}` : user.teacherCode ? ` · ${user.teacherCode}` : ''}`}
                   </p>
                 </div>
-                <div className="my-1 h-px bg-blue-100" />
+                <div className="my-1 h-px bg-slate-100" />
                 <button
                   type="button"
                   onClick={logout}
-                  className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-semibold text-blue-700 transition hover:bg-blue-50 hover:text-blue-800"
+                  className="flex min-h-9 w-full items-center gap-2.5 rounded-md px-3 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50"
                 >
                   <IconLogOut className="h-4 w-4" />
                   <span>Đăng xuất</span>
@@ -204,13 +204,13 @@ function SiteHeader({ pathname }: { pathname: string }) {
             <div className="flex items-center gap-2">
               <a
                 href="/login"
-                className="hidden min-h-10 items-center rounded-[10px] px-3.5 text-xs font-semibold text-white transition hover:bg-blue-700 sm:inline-flex"
+                className="hidden min-h-9 items-center rounded-md px-3 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:inline-flex"
               >
                 Đăng nhập
               </a>
               <a
                 href="/register"
-                className="inline-flex min-h-10 items-center rounded-[10px] bg-white px-4 text-xs font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                className="inline-flex min-h-9 items-center rounded-md bg-blue-600 px-3.5 text-xs font-semibold text-white transition hover:bg-blue-700"
               >
                 Đăng ký
               </a>
@@ -219,20 +219,18 @@ function SiteHeader({ pathname }: { pathname: string }) {
         </div>
       </div>
 
-      <nav className="flex w-full justify-start gap-1 overflow-x-auto border-t border-white/15 bg-[#0d6efd] px-3 py-2 text-xs sm:justify-center lg:hidden" aria-label="Điều hướng chính trên thiết bị di động">
+      <nav className="flex w-full justify-start gap-1 overflow-x-auto border-t border-slate-100 bg-white px-3 text-xs sm:justify-center lg:hidden" aria-label="Điều hướng chính trên thiết bị di động">
         {visibleNavigationRoutes.map((item) => {
           const active = pathname === item.path || (item.path === '/problems' && pathname.startsWith('/problems/'))
-          const Icon = item.icon
           return (
             <a
               key={item.path}
               href={item.path}
               aria-current={active ? 'page' : undefined}
-              className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 font-semibold transition ${
-                active ? 'bg-white text-blue-700 shadow-sm' : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+              className={`relative flex min-h-10 shrink-0 items-center px-3 font-medium transition after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 ${
+                active ? 'text-blue-600 after:bg-blue-600' : 'text-slate-500 after:bg-transparent hover:text-slate-900'
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
               <span>{item.label}</span>
             </a>
           )
@@ -248,8 +246,8 @@ function avatarInitial(name: string) {
 
 function SiteFooter() {
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-white px-4 py-5 text-xs text-slate-500 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-3 sm:flex-row">
+    <footer className="mt-auto border-t border-slate-200 bg-white px-4 py-4 text-xs text-slate-400 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1180px] flex-col items-center justify-between gap-3 sm:flex-row">
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />

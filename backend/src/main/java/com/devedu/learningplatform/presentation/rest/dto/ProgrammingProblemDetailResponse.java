@@ -15,6 +15,8 @@ public record ProgrammingProblemDetailResponse(
         String title,
         String summary,
         String description,
+        String inputDescription,
+        String outputDescription,
         String sampleInput,
         String sampleOutput,
         ProblemTopic topic,

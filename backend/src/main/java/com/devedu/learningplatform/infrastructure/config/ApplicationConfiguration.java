@@ -7,7 +7,6 @@ import com.devedu.learningplatform.application.port.in.ExecuteCodeUseCase;
 import com.devedu.learningplatform.application.port.in.CourseLearningUseCase;
 import com.devedu.learningplatform.application.port.in.CourseClassroomUseCase;
 import com.devedu.learningplatform.application.port.in.ExamUseCase;
-import com.devedu.learningplatform.application.port.in.InterviewQuestionsUseCase;
 import com.devedu.learningplatform.application.port.in.ListExternalAuthProvidersUseCase;
 import com.devedu.learningplatform.application.port.in.CodeJudgeUseCase;
 import com.devedu.learningplatform.application.port.in.AdminUserManagementUseCase;
@@ -24,7 +23,6 @@ import com.devedu.learningplatform.application.port.out.ExamAnswerRepository;
 import com.devedu.learningplatform.application.port.out.ExamAttemptRepository;
 import com.devedu.learningplatform.application.port.out.ExamQuestionRepository;
 import com.devedu.learningplatform.application.port.out.ExamRepository;
-import com.devedu.learningplatform.application.port.out.InterviewQuestionRepository;
 import com.devedu.learningplatform.application.port.out.ProblemTestCaseRepository;
 import com.devedu.learningplatform.application.port.out.SandboxExecutionPort;
 import com.devedu.learningplatform.application.port.out.PasswordHasher;
@@ -33,12 +31,12 @@ import com.devedu.learningplatform.application.port.out.UserRepository;
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
+import com.devedu.learningplatform.application.port.out.ProblemRunStatisticsRepository;
 import com.devedu.learningplatform.application.service.AuthenticationService;
 import com.devedu.learningplatform.application.service.CodeExecutionService;
 import com.devedu.learningplatform.application.service.CourseLearningService;
 import com.devedu.learningplatform.application.service.CourseClassroomService;
 import com.devedu.learningplatform.application.service.ExamService;
-import com.devedu.learningplatform.application.service.InterviewQuestionsService;
 import com.devedu.learningplatform.application.service.CodeJudgeService;
 import com.devedu.learningplatform.application.service.ProgrammingProblemsService;
 import com.devedu.learningplatform.application.service.SystemStatusService;
@@ -97,10 +95,11 @@ public class ApplicationConfiguration {
             ProblemSubmissionRepository submissionRepository,
             ProblemDraftRepository draftRepository,
             ProblemTestCaseRepository testCaseRepository,
+            ProblemRunStatisticsRepository runStatisticsRepository,
             CodeJudgeUseCase codeJudgeUseCase,
             Clock clock
     ) {
-        return new ProgrammingProblemsService(problemRepository, submissionRepository, draftRepository, testCaseRepository, codeJudgeUseCase, clock);
+        return new ProgrammingProblemsService(problemRepository, submissionRepository, draftRepository, testCaseRepository, runStatisticsRepository, codeJudgeUseCase, clock);
     }
 
     @Bean
@@ -141,10 +140,5 @@ public class ApplicationConfiguration {
                             ExamAttemptRepository attemptRepository, ExamAnswerRepository answerRepository,
                             Clock clock) {
         return new ExamService(examRepository, questionRepository, attemptRepository, answerRepository, clock);
-    }
-
-    @Bean
-    InterviewQuestionsUseCase interviewQuestionsUseCase(InterviewQuestionRepository repository) {
-        return new InterviewQuestionsService(repository);
     }
 }

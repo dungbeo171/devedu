@@ -21,4 +21,6 @@ public interface CourseRepository {
     Optional<Course> findById(UUID id);
 
     Optional<Course> findBySlug(String slug);
+
+    void deleteById(UUID id);
 }

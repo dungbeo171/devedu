@@ -53,7 +53,7 @@ judge:
   limits:
     memory: ${JUDGE_MEMORY:384m}
     mysql-memory: ${JUDGE_MYSQL_MEMORY:512m}
-    cpus: ${JUDGE_CPUS:0.5}
+    cpus: ${JUDGE_CPUS:1.0}
     pids: ${JUDGE_PIDS:64}
     output-bytes: ${JUDGE_OUTPUT_BYTES:1048576}
     compile-timeout-ms: ${JUDGE_COMPILE_TIMEOUT_MS:20000}

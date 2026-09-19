@@ -19,10 +19,13 @@ export interface ProgrammingProblemSummary {
   topic: ProblemTopic
   difficulty: ProblemDifficulty
   allowedLanguages: SubmissionLanguage[]
+  acceptanceRate: number
 }
 
-export interface ProgrammingProblemDetail extends ProgrammingProblemSummary {
+export interface ProgrammingProblemDetail extends Omit<ProgrammingProblemSummary, 'acceptanceRate'> {
   description: string
+  inputDescription: string
+  outputDescription: string
   sampleInput: string
   sampleOutput: string
   starterCodes: Partial<Record<SubmissionLanguage, string>>
@@ -39,6 +42,7 @@ export interface ProblemTestCaseRunResult {
   position: number
   passed: boolean
   status: 'ACCEPTED' | 'WRONG_ANSWER' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
+  actualOutput: string | null
 }
 
 export interface ProblemTestRun {
@@ -81,6 +85,8 @@ export interface CreateProgrammingProblem {
   title: string
   summary: string
   description: string
+  inputDescription: string
+  outputDescription: string
   sampleInput: string
   sampleOutput: string
   topic: ProblemTopic

@@ -12,7 +12,9 @@ import com.devedu.learningplatform.application.port.in.command.RunProblemTestsCo
 import com.devedu.learningplatform.application.port.in.command.UpdateProgrammingProblemCommand;
 import com.devedu.learningplatform.application.port.in.command.CreateProblemTestCaseCommand;
 import com.devedu.learningplatform.application.port.in.result.ManagedProgrammingProblem;
+import com.devedu.learningplatform.application.port.in.result.ProgrammingProblemListItem;
 import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
+import com.devedu.learningplatform.application.port.out.ProblemRunStatisticsRepository;
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
 import com.devedu.learningplatform.application.port.out.ProgrammingProblemRepository;
 import com.devedu.learningplatform.application.port.out.ProblemTestCaseRepository;
@@ -26,6 +28,8 @@ import com.devedu.learningplatform.domain.model.ProblemTestCase;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -38,12 +42,16 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
     private static final int MAXIMUM_SOURCE_CODE_LENGTH = 100_000;
     private static final int MAXIMUM_INPUT_LENGTH = 100_000;
     private static final int MAXIMUM_DESCRIPTION_LENGTH = 50_000;
+    private static final int MINIMUM_TEST_CASES = 3;
     private static final int MAXIMUM_TEST_CASES = 50;
+    private static final String SQL_INPUT_DESCRIPTION =
+            "Không có dữ liệu đầu vào từ stdin. Các câu lệnh tạo bảng và dữ liệu mẫu đã được đặt sẵn trong code.";
 
     private final ProgrammingProblemRepository problemRepository;
     private final ProblemSubmissionRepository submissionRepository;
     private final ProblemDraftRepository draftRepository;
     private final ProblemTestCaseRepository testCaseRepository;
+    private final ProblemRunStatisticsRepository runStatisticsRepository;
     private final CodeJudgeUseCase codeJudge;
     private final Clock clock;
 
@@ -52,6 +60,7 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
             ProblemSubmissionRepository submissionRepository,
             ProblemDraftRepository draftRepository,
             ProblemTestCaseRepository testCaseRepository,
+            ProblemRunStatisticsRepository runStatisticsRepository,
             CodeJudgeUseCase codeJudge,
             Clock clock
     ) {
@@ -59,13 +68,23 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         this.submissionRepository = submissionRepository;
         this.draftRepository = draftRepository;
         this.testCaseRepository = testCaseRepository;
+        this.runStatisticsRepository = runStatisticsRepository;
         this.codeJudge = codeJudge;
         this.clock = clock;
     }
 
     @Override
-    public List<ProgrammingProblem> list(ProblemTopic topic, ProblemDifficulty difficulty, CodeLanguage language) {
-        return problemRepository.findAll(topic, difficulty, language);
+    public List<ProgrammingProblemListItem> list(ProblemTopic topic, ProblemDifficulty difficulty, CodeLanguage language) {
+        var problems = problemRepository.findAll(topic, difficulty, language);
+        var problemIds = problems.stream().map(ProgrammingProblem::id).collect(java.util.stream.Collectors.toSet());
+        var statistics = runStatisticsRepository.findAllByProblemIds(problemIds);
+        return problems.stream()
+                .map(problem -> new ProgrammingProblemListItem(
+                        problem,
+                        statistics.getOrDefault(problem.id(), new com.devedu.learningplatform.domain.model.ProblemRunStatistics(problem.id(), 0, 0))
+                                .acceptanceRate()
+                ))
+                .toList();
     }
 
     @Override
@@ -79,9 +98,22 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
     public ProgrammingProblem create(CreateProgrammingProblemCommand command) {
         Objects.requireNonNull(command, "Create programming problem command is required");
         var slug = normalizeSlug(command.slug());
+        var sqlProblem = isSqlProblem(command.topic(), command.allowedLanguages());
+        var inputDescription = sqlProblem
+                ? SQL_INPUT_DESCRIPTION
+                : normalizeRequirement(command.inputDescription(), "Input description");
+        var outputDescription = normalizeRequirement(command.outputDescription(), "Output description");
+        var sampleInput = sqlProblem ? "" : command.sampleInput();
+        var starterCodes = sqlProblem
+                ? starterCodesWithSqlSetup(command.starterCodes(), command.sampleInput())
+                : command.starterCodes();
+        var requestedTestCases = sqlProblem
+                ? testCasesWithSqlSampleFirst(command.testCases(), command.sampleInput())
+                : command.testCases();
         validateProblemFields(slug, command.title(), command.summary(), command.description(),
-                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
-                command.allowedLanguages(), command.starterCodes(), command.testCases());
+                inputDescription, outputDescription, sampleInput, command.sampleOutput(),
+                command.topic(), command.difficulty(),
+                command.allowedLanguages(), starterCodes, requestedTestCases);
         if (problemRepository.existsBySlug(slug)) {
             throw new ProgrammingProblemSlugAlreadyExistsException(slug);
         }
@@ -93,15 +125,17 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
                 command.title(),
                 command.summary(),
                 command.description(),
-                command.sampleInput(),
+                inputDescription,
+                outputDescription,
+                sampleInput,
                 command.sampleOutput(),
                 command.topic(),
                 command.difficulty(),
                 command.allowedLanguages(),
-                command.starterCodes(),
+                starterCodes,
                 Instant.now(clock)
         );
-        var testCases = createTestCases(problemId, command.testCases());
+        var testCases = createTestCases(problemId, requestedTestCases);
         return problemRepository.saveWithTestCases(problem, testCases);
     }
 
@@ -116,18 +150,32 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         Objects.requireNonNull(command, "Update programming problem command is required");
         var existing = getBySlug(command.currentSlug());
         var slug = normalizeSlug(command.slug());
+        var sqlProblem = isSqlProblem(command.topic(), command.allowedLanguages());
+        var inputDescription = sqlProblem
+                ? SQL_INPUT_DESCRIPTION
+                : normalizeRequirement(command.inputDescription(), "Input description");
+        var outputDescription = normalizeRequirement(command.outputDescription(), "Output description");
+        var sampleInput = sqlProblem ? "" : command.sampleInput();
+        var starterCodes = sqlProblem
+                ? starterCodesWithSqlSetup(command.starterCodes(), command.sampleInput())
+                : command.starterCodes();
+        var requestedTestCases = sqlProblem
+                ? testCasesWithSqlSampleFirst(command.testCases(), command.sampleInput())
+                : command.testCases();
         validateProblemFields(slug, command.title(), command.summary(), command.description(),
-                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
-                command.allowedLanguages(), command.starterCodes(), command.testCases());
+                inputDescription, outputDescription, sampleInput, command.sampleOutput(),
+                command.topic(), command.difficulty(),
+                command.allowedLanguages(), starterCodes, requestedTestCases);
         if (!existing.slug().equals(slug) && problemRepository.existsBySlug(slug)) {
             throw new ProgrammingProblemSlugAlreadyExistsException(slug);
         }
         var updated = new ProgrammingProblem(
                 existing.id(), slug, command.title(), command.summary(), command.description(),
-                command.sampleInput(), command.sampleOutput(), command.topic(), command.difficulty(),
-                command.allowedLanguages(), command.starterCodes(), existing.createdAt()
+                inputDescription, outputDescription,
+                sampleInput, command.sampleOutput(), command.topic(), command.difficulty(),
+                command.allowedLanguages(), starterCodes, existing.createdAt()
         );
-        return problemRepository.saveWithTestCases(updated, createTestCases(existing.id(), command.testCases()));
+        return problemRepository.saveWithTestCases(updated, createTestCases(existing.id(), requestedTestCases));
     }
 
     @Override
@@ -143,12 +191,69 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         requireSourceCode(command.sourceCode());
         var problem = getBySlug(command.problemSlug());
         requireAllowedLanguage(problem, command.language());
-        return codeJudge.judge(new JudgeSubmissionCommand(
+        var testCases = testCasesWithPublicSampleFirst(
+                problem,
+                testCaseRepository.findAllByProblemId(problem.id())
+        );
+        var result = codeJudge.judge(new JudgeSubmissionCommand(
                 UUID.randomUUID(),
                 command.language(),
                 command.sourceCode(),
-                testCaseRepository.findAllByProblemId(problem.id())
+                testCases
         ));
+        runStatisticsRepository.record(problem.id(), result.status() == com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED);
+        return result;
+    }
+
+    private List<ProblemTestCase> testCasesWithPublicSampleFirst(
+            ProgrammingProblem problem,
+            List<ProblemTestCase> testCases
+    ) {
+        if (testCases.isEmpty() || problem.topic() == ProblemTopic.SQL) return testCases;
+
+        var first = testCases.get(0);
+        var publicSample = new ProblemTestCase(
+                first.id(),
+                first.problemId(),
+                problem.sampleInput(),
+                problem.sampleOutput(),
+                first.timeLimitMillis(),
+                first.position()
+        );
+        var prepared = new ArrayList<>(testCases);
+        prepared.set(0, publicSample);
+        return List.copyOf(prepared);
+    }
+
+    private boolean isSqlProblem(ProblemTopic topic, Set<CodeLanguage> allowedLanguages) {
+        return topic == ProblemTopic.SQL
+                && allowedLanguages != null
+                && allowedLanguages.contains(CodeLanguage.MYSQL);
+    }
+
+    private java.util.Map<CodeLanguage, String> starterCodesWithSqlSetup(
+            java.util.Map<CodeLanguage, String> starterCodes,
+            String setupSql
+    ) {
+        if (starterCodes == null || !starterCodes.containsKey(CodeLanguage.MYSQL)) return starterCodes;
+        var prepared = new HashMap<>(starterCodes);
+        prepared.put(CodeLanguage.MYSQL, MySqlSampleSetup.includeIn(
+                starterCodes.get(CodeLanguage.MYSQL), setupSql
+        ));
+        return java.util.Map.copyOf(prepared);
+    }
+
+    private List<CreateProblemTestCaseCommand> testCasesWithSqlSampleFirst(
+            List<CreateProblemTestCaseCommand> testCases,
+            String setupSql
+    ) {
+        if (testCases == null || testCases.isEmpty() || setupSql == null || setupSql.isBlank()) return testCases;
+        var first = testCases.get(0);
+        var prepared = new ArrayList<>(testCases);
+        prepared.set(0, new CreateProblemTestCaseCommand(
+                setupSql, first.expectedOutput(), first.timeLimitMillis()
+        ));
+        return List.copyOf(prepared);
     }
 
     @Override
@@ -253,6 +358,8 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
             String title,
             String summary,
             String description,
+            String inputDescription,
+            String outputDescription,
             String sampleInput,
             String sampleOutput,
             ProblemTopic topic,
@@ -267,6 +374,8 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         requireLength(title, "Title", 180);
         requireLength(summary, "Summary", 500);
         requireLength(description, "Description", MAXIMUM_DESCRIPTION_LENGTH);
+        requireLength(inputDescription, "Input description", MAXIMUM_DESCRIPTION_LENGTH);
+        requireLength(outputDescription, "Output description", MAXIMUM_DESCRIPTION_LENGTH);
         requireMaximumLength(sampleInput, "Sample input", MAXIMUM_INPUT_LENGTH);
         requireMaximumLength(sampleOutput, "Sample output", MAXIMUM_INPUT_LENGTH);
         Objects.requireNonNull(topic, "Problem topic is required");
@@ -286,8 +395,8 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
                 throw new IllegalArgumentException("Starter code must not exceed 100000 characters");
             }
         }
-        if (testCases == null || testCases.isEmpty()) {
-            throw new IllegalArgumentException("At least one test case is required");
+        if (testCases == null || testCases.size() < MINIMUM_TEST_CASES) {
+            throw new IllegalArgumentException("At least three test cases are required");
         }
         if (testCases.size() > MAXIMUM_TEST_CASES) {
             throw new IllegalArgumentException("Test cases must not exceed 50");
@@ -324,5 +433,12 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         if (value != null && value.length() > maximumLength) {
             throw new IllegalArgumentException(field + " must not exceed " + maximumLength + " characters");
         }
+    }
+
+    private String normalizeRequirement(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " is required");
+        }
+        return value.trim();
     }
 }

@@ -3,6 +3,8 @@ package com.devedu.learningplatform.application.service;
 import com.devedu.learningplatform.application.exception.UserManagementForbiddenException;
 import com.devedu.learningplatform.application.exception.UserNotFoundException;
 import com.devedu.learningplatform.application.port.in.command.UpdateUserRoleCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateManagedUserCommand;
+import com.devedu.learningplatform.application.port.in.command.DeleteManagedUserCommand;
 import com.devedu.learningplatform.application.port.out.PasswordHasher;
 import com.devedu.learningplatform.application.port.out.UserRepository;
 import com.devedu.learningplatform.domain.model.User;
@@ -81,6 +83,23 @@ class AdminUserManagementServiceTest {
         assertThatThrownBy(() -> service.updateRole(new UpdateUserRoleCommand(
                 admin.id(), admin.role(), 999, UserRole.TEACHER
         ))).isInstanceOf(UserNotFoundException.class);
+    }
+
+    @Test
+    void adminCanEditAndDeleteTeacherOrStudent() {
+        var admin = saveUser("Admin", "admin@devedu.local", UserRole.ADMIN);
+        var teacher = saveUser("Teacher", "teacher@devedu.local", UserRole.TEACHER);
+        var student = saveUser("Student", "student@devedu.local", UserRole.STUDENT);
+
+        var updated = service.updateUser(new UpdateManagedUserCommand(
+                admin.id(), admin.role(), student.publicId(), "Updated student", student.email(), "new-password", UserRole.STUDENT
+        ));
+        service.deleteUser(new DeleteManagedUserCommand(admin.id(), admin.role(), teacher.publicId()));
+        service.deleteUser(new DeleteManagedUserCommand(admin.id(), admin.role(), student.publicId()));
+
+        assertThat(updated.name()).isEqualTo("Updated student");
+        assertThat(updated.passwordHash()).isEqualTo("hashed:new-password");
+        assertThat(repository.findAll()).containsExactly(admin);
     }
 
     private User saveUser(String name, String email, UserRole role) {

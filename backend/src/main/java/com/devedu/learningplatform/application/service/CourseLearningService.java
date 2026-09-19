@@ -49,6 +49,8 @@ import com.devedu.learningplatform.application.port.in.result.ManagedCourse;
 import com.devedu.learningplatform.application.port.in.result.EnrolledCourseStudent;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseStudentsCommand;
 import com.devedu.learningplatform.application.port.in.command.UpdateCourseStudentCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateCourseCommand;
+import com.devedu.learningplatform.application.port.in.command.DeleteCourseCommand;
 
 public final class CourseLearningService implements CourseLearningUseCase {
 
@@ -115,6 +117,46 @@ public final class CourseLearningService implements CourseLearningUseCase {
                 command.endDate(),
                 Instant.now(clock)
         ));
+    }
+
+    @Override
+    public Course updateCourse(UpdateCourseCommand command) {
+        Objects.requireNonNull(command, "Update course command is required");
+        requireAdmin(command.actorRole());
+        Objects.requireNonNull(command.actorId(), "Actor id is required");
+        var current = getCourse(command.courseId());
+        var slug = Course.normalizeSlug(command.slug());
+        if (!current.slug().equals(slug) && courseRepository.existsBySlug(slug)) {
+            throw new CourseSlugAlreadyExistsException(slug);
+        }
+        return courseRepository.save(new Course(
+                current.id(),
+                slug,
+                command.title(),
+                command.description(),
+                current.teacherId(),
+                command.startDate() == null ? current.startDate() : command.startDate(),
+                command.endDate(),
+                current.createdAt()
+        ));
+    }
+
+    @Override
+    public void deleteCourse(DeleteCourseCommand command) {
+        Objects.requireNonNull(command, "Delete course command is required");
+        requireAdmin(command.actorRole());
+        Objects.requireNonNull(command.actorId(), "Actor id is required");
+        var course = getCourse(command.courseId());
+        var materials = materialRepository.findAllByCourseId(course.id());
+        courseRepository.deleteById(course.id());
+        for (var material : materials) {
+            try {
+                fileStorage.delete(material.storageKey());
+            } catch (RuntimeException ignored) {
+                // The course metadata is already deleted. A leftover local file is harmless
+                // and must not turn a successful course deletion into a false failure.
+            }
+        }
     }
 
     @Override
@@ -414,10 +456,16 @@ public final class CourseLearningService implements CourseLearningUseCase {
         }
     }
 
+    private void requireAdmin(UserRole role) {
+        if (role != UserRole.ADMIN) {
+            throw new CourseManagementForbiddenException();
+        }
+    }
+
     private void requireCourseAccess(Course course, UUID actorId, UserRole actorRole) {
         Objects.requireNonNull(actorId, "Actor id is required");
         if (actorRole == UserRole.ADMIN || (actorRole == UserRole.TEACHER && course.teacherId().equals(actorId))) return;
-        if (actorRole == UserRole.STUDENT && enrollmentRepository.existsByCourseIdAndStudentId(course.id(), actorId)) return;
+        if (enrollmentRepository.existsByCourseIdAndStudentId(course.id(), actorId)) return;
         throw new CourseManagementForbiddenException();
     }
 

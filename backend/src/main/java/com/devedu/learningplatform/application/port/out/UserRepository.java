@@ -20,6 +20,11 @@ public interface UserRepository {
 
     List<User> findAll();
 
+    default List<User> findAllByIds(List<UUID> ids) {
+        var requestedIds = new java.util.HashSet<>(ids);
+        return findAll().stream().filter(user -> requestedIds.contains(user.id())).toList();
+    }
+
     default List<User> searchStudents(String query, int limit) {
         var normalized = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
         return findAll().stream()

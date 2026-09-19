@@ -11,7 +11,6 @@ import com.devedu.learningplatform.application.exception.ExamForbiddenException;
 import com.devedu.learningplatform.application.exception.ExamResourceNotFoundException;
 import com.devedu.learningplatform.application.exception.ExamSlugAlreadyExistsException;
 import com.devedu.learningplatform.application.exception.ExamStateException;
-import com.devedu.learningplatform.application.exception.InterviewQuestionNotFoundException;
 import com.devedu.learningplatform.application.exception.JudgeUnavailableException;
 import com.devedu.learningplatform.application.exception.UserManagementForbiddenException;
 import com.devedu.learningplatform.application.exception.UserNotFoundException;
@@ -99,12 +98,6 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ExamForbiddenException.class)
     ResponseEntity<ApiErrorResponse> handleExamForbidden(ExamForbiddenException exception,HttpServletRequest request) {
         return error(HttpStatus.FORBIDDEN, exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(InterviewQuestionNotFoundException.class)
-    ResponseEntity<ApiErrorResponse> handleInterviewQuestionNotFound(InterviewQuestionNotFoundException exception,
-                                                                      HttpServletRequest request) {
-        return error(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
     @ExceptionHandler(JudgeUnavailableException.class)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SmartCodeEditor } from '../../../shared/components/SmartCodeEditor'
+import { HtmlPreview } from '../../../shared/components/HtmlPreview'
 import {
   getProgrammingProblem,
   getProgrammingProblemDraft,
@@ -65,12 +66,16 @@ const languageOptions: LanguageOption[] = [
   },
 ]
 
+const sqlSampleDataStartMarker = '-- DEVEDU_SAMPLE_DATA_BEGIN'
+const sqlSampleDataEndMarker = '-- DEVEDU_SAMPLE_DATA_END'
+
 export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceProps) {
   const [problem, setProblem] = useState<ProgrammingProblemDetail | null>(null)
   const [language, setLanguage] = useState<SubmissionLanguage>('CPP')
   const [sourceCode, setSourceCode] = useState('')
   const [input, setInput] = useState('')
   const [output, setOutput] = useState('Nhấn Chạy test để kiểm tra toàn bộ test case.')
+  const [htmlPreview, setHtmlPreview] = useState('')
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [runningInput, setRunningInput] = useState(false)
@@ -79,6 +84,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null)
   const [testCaseResults, setTestCaseResults] = useState<ProblemTestCaseRunResult[]>([])
   const [draftReady, setDraftReady] = useState(false)
+  const [statementCollapsed, setStatementCollapsed] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -101,11 +107,12 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
           ? draft.language
           : initialLanguage
         setLanguage(restoredLanguage)
-        setSourceCode(draft?.sourceCode ?? starterCodeFor(result, restoredLanguage))
-        setInput(draft?.input ?? result.sampleInput)
+        setSourceCode(restoredSourceCode(result, restoredLanguage, draft?.sourceCode))
+        setInput(result.topic === 'SQL' ? '' : (draft?.input ?? result.sampleInput))
         setOutput(result.sampleOutput
           ? `Output mẫu:\n${result.sampleOutput}`
           : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
+        setHtmlPreview('')
         setRunStatus(null)
         setTestCaseResults([])
         setDraftReady(true)
@@ -135,6 +142,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
   const allowedLanguageOptions = problem
     ? languageOptions.filter((item) => problem.allowedLanguages.includes(item.value))
     : languageOptions
+  const isSqlWorkspace = problem?.topic === 'SQL' || language === 'MYSQL'
 
   function changeLanguage(nextLanguage: SubmissionLanguage) {
     const option = languageOptions.find((item) => item.value === nextLanguage)
@@ -144,6 +152,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     setOutput(problem?.sampleOutput
       ? `Output mẫu:\n${problem.sampleOutput}`
       : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
+    setHtmlPreview('')
     setMessage('')
     setRunStatus(null)
     setTestCaseResults([])
@@ -157,6 +166,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     setRunStatus(null)
     setTestCaseResults([])
     setOutput('Đang chạy toàn bộ test case...')
+    setHtmlPreview('')
     try {
       await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
       const result = await runProgrammingProblemTests(problem.slug, language, sourceCode)
@@ -168,9 +178,9 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
       setTestCaseResults([])
       const reason = error instanceof Error ? error.message : ''
       if (reason === 'AUTHENTICATION_REQUIRED') {
-        setOutput('Bạn cần đăng nhập bằng tài khoản sinh viên trước khi chạy test case.')
-      } else if (reason === 'STUDENT_ROLE_REQUIRED') {
-        setOutput('Chỉ tài khoản STUDENT có thể chạy test case.')
+        setOutput('Bạn cần đăng nhập trước khi chạy test case.')
+      } else if (reason === 'ROLE_REQUIRED') {
+        setOutput('Tài khoản hiện tại chưa có quyền chạy test case.')
       } else {
         setOutput(reason || 'Không thể chạy test case lúc này.')
       }
@@ -186,12 +196,15 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     setRunStatus(null)
     setTestCaseResults([])
     setOutput('Đang chạy với input tùy chỉnh...')
+    setHtmlPreview('')
     try {
       const result = await runProgrammingProblemCode(language, sourceCode, input)
       setOutput(result.output)
+      if (language === 'HTML' && result.status === 'SUCCESS') setHtmlPreview(result.output)
       if (result.status !== 'SUCCESS') setRunStatus(result.status)
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Không thể chạy input lúc này.')
+      setHtmlPreview('')
     } finally {
       setRunningInput(false)
     }
@@ -213,9 +226,9 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     } catch (error) {
       const reason = error instanceof Error ? error.message : ''
       if (reason === 'AUTHENTICATION_REQUIRED') {
-        setMessage('Bạn cần đăng nhập bằng tài khoản sinh viên trước khi lưu bài.')
-      } else if (reason === 'STUDENT_ROLE_REQUIRED') {
-        setMessage('Chỉ tài khoản STUDENT có thể lưu bài.')
+        setMessage('Bạn cần đăng nhập trước khi lưu bài.')
+      } else if (reason === 'ROLE_REQUIRED') {
+        setMessage('Tài khoản hiện tại chưa có quyền lưu bài.')
       } else {
         setMessage(reason || 'Không thể gửi bài lúc này.')
       }
@@ -274,58 +287,102 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
       </button>
 
       {/* Main Workspace Frame */}
-      <div className="grid overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] xl:grid-cols-[minmax(340px,0.72fr)_minmax(0,1.68fr)]">
+      <div className={`grid overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(390px,0.92fr)_minmax(0,1.48fr)]'}`}>
         {/* Problem Statement Pane */}
-        <article className="border-b border-slate-200 bg-white p-6 sm:p-8 xl:border-r xl:border-b-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-blue-400">
-              {topicLabels[problem.topic]}
-            </span>
-            <span className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold ${
-              problem.difficulty === 'EASY'
-              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                : problem.difficulty === 'MEDIUM'
-                ? 'border border-amber-200 bg-amber-50 text-amber-700'
-                : 'border border-red-200 bg-red-50 text-red-700'
-            }`}>
-              {problem.difficulty === 'EASY' ? 'Dễ' : problem.difficulty === 'MEDIUM' ? 'Trung bình' : 'Khó'}
-            </span>
-          </div>
+        {!statementCollapsed ? (
+          <article className="border-b border-slate-200 bg-white p-6 sm:p-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-blue-400">
+                  {topicLabels[problem.topic]}
+                </span>
+                <span className={`rounded-lg px-2.5 py-0.5 text-[11px] font-bold ${
+                  problem.difficulty === 'EASY'
+                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : problem.difficulty === 'MEDIUM'
+                    ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border border-red-200 bg-red-50 text-red-700'
+                }`}>
+                  {problem.difficulty === 'EASY' ? 'Dễ' : problem.difficulty === 'MEDIUM' ? 'Trung bình' : 'Khó'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatementCollapsed(true)}
+                className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                aria-label="Thu gọn đề bài"
+              >
+                Thu gọn
+              </button>
+            </div>
 
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-950">{problem.title}</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">{problem.summary}</p>
 
           <div className="my-6 h-px bg-slate-200" />
-          <h2 className="text-sm font-bold text-slate-900">Yêu cầu đề bài</h2>
+          <h2 className="text-sm font-bold text-slate-900">Đề bài</h2>
           <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-700">{problem.description}</p>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-              <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                Sample Input
+          <div className="mt-7 grid gap-3">
+            <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <h3 className="text-xs font-black uppercase tracking-[0.16em] text-blue-800">Yêu cầu Input</h3>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
+                {problem.inputDescription}
               </p>
-              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-700">
-                {problem.sampleInput || '(trống)'}
-              </pre>
-            </div>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-              <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                Sample Output
+            </section>
+            <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <h3 className="text-xs font-black uppercase tracking-[0.16em] text-blue-800">Yêu cầu Output</h3>
+              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
+                {problem.outputDescription}
               </p>
-              <pre className="overflow-auto whitespace-pre-wrap p-3.5 font-mono text-xs leading-6 text-slate-700">
-                {problem.sampleOutput || '(trống)'}
-              </pre>
+            </section>
+          </div>
+
+          <div className="mt-8">
+            <h2 className="text-sm font-bold text-slate-900">Ví dụ</h2>
+            <div className="mt-3 grid gap-4">
+              {!isSqlWorkspace ? (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                  <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    Input mẫu
+                  </p>
+                  <pre className="min-h-[190px] overflow-auto whitespace-pre-wrap p-4 font-mono text-sm leading-7 text-slate-700">
+                    {problem.sampleInput || '(trống)'}
+                  </pre>
+                </div>
+              ) : null}
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <p className="border-b border-slate-200 bg-slate-100 px-3.5 py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                  Output mẫu
+                </p>
+                <pre className="min-h-[190px] overflow-auto whitespace-pre-wrap p-4 font-mono text-sm leading-7 text-slate-700">
+                  {problem.sampleOutput || '(trống)'}
+                </pre>
+              </div>
             </div>
           </div>
-        </article>
+          </article>
+        ) : null}
 
         {/* Code Editor & Execution Pane */}
         <div className="flex min-h-[600px] flex-col bg-slate-950 text-slate-100">
           {/* Top action toolbar */}
           <div className="flex flex-col gap-3 border-b border-white/10 bg-slate-900/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-mono text-xs text-slate-400">
-              solution / <span className="font-semibold text-slate-200">{selectedLanguage.fileName}</span>
-            </p>
+            <div className="flex items-center gap-3">
+              {statementCollapsed ? (
+                <button
+                  type="button"
+                  onClick={() => setStatementCollapsed(false)}
+                  className="shrink-0 rounded-lg border border-blue-400/30 bg-blue-500/15 px-2.5 py-1.5 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/25"
+                  aria-label="Mở đề bài"
+                >
+                  Mở đề bài
+                </button>
+              ) : null}
+              <p className="font-mono text-xs text-slate-400">
+                solution / <span className="font-semibold text-slate-200">{selectedLanguage.fileName}</span>
+              </p>
+            </div>
             <div className="flex items-center gap-2.5">
               <div className="relative">
                 <label htmlFor="problem-language" className="sr-only">Chọn ngôn ngữ</label>
@@ -406,8 +463,9 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               />
             </div>
 
-            <div className="grid min-h-[360px] grid-rows-2 bg-slate-950/90 dark-scroll">
+            <div className={`grid min-h-[360px] bg-slate-950/90 dark-scroll ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-2'}`}>
               {/* Input test case */}
+              {!isSqlWorkspace ? (
               <div className="flex min-h-[180px] flex-col border-b border-white/10">
                 <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-slate-900/60 px-4 py-2 text-xs">
                   <label htmlFor="problem-input" className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -444,6 +502,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                   className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-xs leading-6 text-slate-300 outline-none placeholder:text-slate-600 focus:bg-slate-950/50"
                 />
               </div>
+              ) : null}
 
               {/* Output & Judge status */}
               <div className="flex min-h-[180px] flex-col bg-slate-950">
@@ -464,23 +523,57 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                   ) : null}
                 </div>
                 {testCaseResults.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 border-b border-white/10 p-3">
-                    {testCaseResults.map((testCase) => (
-                      <div
-                        key={testCase.position}
-                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold ${
-                          testCase.passed
-                            ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
-                            : 'border-rose-500/40 bg-rose-500/15 text-rose-400'
-                        }`}
-                        title={testCase.status}
-                      >
-                        {testCase.passed ? <IconCheck className="h-3.5 w-3.5" /> : <span className="text-base leading-none">×</span>}
-                        <span>Test case {testCase.position}</span>
+                  <>
+                    <div className="flex flex-wrap gap-2 border-b border-white/10 p-3">
+                      {testCaseResults.map((testCase) => (
+                        <div
+                          key={testCase.position}
+                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[10px] font-bold ${
+                            testCase.passed
+                              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                              : 'border-rose-500/40 bg-rose-500/15 text-rose-400'
+                          }`}
+                          title={testCase.status}
+                        >
+                          {testCase.passed ? <IconCheck className="h-3.5 w-3.5" /> : <span className="text-base leading-none">×</span>}
+                          <span>Test case {testCase.position}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-b border-white/10 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Chi tiết test case 1
+                        </p>
+                        <span className="font-mono text-[10px] text-slate-500">Dữ liệu mẫu công khai</span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-slate-900/70">
+                          <p className="border-b border-white/10 px-3 py-1.5 font-mono text-[10px] font-bold text-slate-400">
+                            Output của bạn
+                          </p>
+                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs leading-5 text-slate-200">
+                            {testCaseResults[0]?.actualOutput || '(trống)'}
+                          </pre>
+                        </div>
+                        <div className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-slate-900/70">
+                          <p className="border-b border-white/10 px-3 py-1.5 font-mono text-[10px] font-bold text-slate-400">
+                            Output mong đợi
+                          </p>
+                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs leading-5 text-slate-200">
+                            {problem.sampleOutput || '(trống)'}
+                          </pre>
+                        </div>
+                      </div>
+                      {testCaseResults.length > 1 ? (
+                        <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                          Input và output của các test case còn lại được ẩn.
+                        </p>
+                      ) : null}
+                    </div>
+                  </>
                 ) : null}
+                {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} /> : null}
                 <pre
                   aria-live="polite"
                   className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
@@ -511,4 +604,21 @@ function defaultLanguageForTopic(topic: ProgrammingProblemDetail['topic']): Subm
 
 function starterCodeFor(problem: ProgrammingProblemDetail, language: SubmissionLanguage): string {
   return problem.starterCodes[language] ?? createStarterCode(language, problem.title)
+}
+
+function restoredSourceCode(
+  problem: ProgrammingProblemDetail,
+  language: SubmissionLanguage,
+  draftSourceCode?: string,
+): string {
+  const starterCode = starterCodeFor(problem, language)
+  if (!draftSourceCode) return starterCode
+  if (language !== 'MYSQL' || draftSourceCode.includes(sqlSampleDataStartMarker)) return draftSourceCode
+
+  const sampleStart = starterCode.indexOf(sqlSampleDataStartMarker)
+  const sampleEnd = starterCode.indexOf(sqlSampleDataEndMarker)
+  if (sampleStart < 0 || sampleEnd < sampleStart) return draftSourceCode
+
+  const sampleBlockEnd = sampleEnd + sqlSampleDataEndMarker.length
+  return `${starterCode.slice(sampleStart, sampleBlockEnd)}\n\n${draftSourceCode.trimStart()}`
 }

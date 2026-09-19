@@ -105,7 +105,7 @@ class AuthorizationRulesTest {
     }
 
     @Test
-    void onlyStudentsCanSubmitProgrammingProblems() throws Exception {
+    void allAuthenticatedRolesCanSubmitProgrammingProblems() throws Exception {
         mockMvc.perform(post("/api/problems/demo/submissions"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/problems/demo/submissions")
@@ -113,59 +113,62 @@ class AuthorizationRulesTest {
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/problems/demo/submissions")
                         .header("Authorization", "Bearer teacher-token"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
         mockMvc.perform(post("/api/problems/demo/submissions")
                         .header("Authorization", "Bearer admin-token"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void onlyStudentsCanRunProgrammingProblemTests() throws Exception {
+    void allAuthenticatedRolesCanRunProgrammingProblemTests() throws Exception {
         var path = "/api/problems/demo/runs";
         mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
         mockMvc.perform(post(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
-        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
+        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
     }
 
     @Test
-    void onlyStudentsCanReadTheirSolvedProgrammingProblems() throws Exception {
+    void allAuthenticatedRolesCanReadTheirSolvedProgrammingProblems() throws Exception {
         var path = "/api/student/problem-progress";
         mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
         mockMvc.perform(get(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
-        mockMvc.perform(get(path).header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
+        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(get(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
     }
 
     @Test
-    void onlyStudentsCanReadAndSaveProgrammingProblemDrafts() throws Exception {
+    void allAuthenticatedRolesCanReadAndSaveProgrammingProblemDrafts() throws Exception {
         var path = "/api/student/problems/demo/draft";
         mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
         mockMvc.perform(get(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
+        mockMvc.perform(get(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
         mockMvc.perform(put(path)
                         .header("Authorization", "Bearer student-token"))
                 .andExpect(status().isOk());
         mockMvc.perform(put(path)
                         .header("Authorization", "Bearer admin-token"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
+        mockMvc.perform(put(path)
+                        .header("Authorization", "Bearer teacher-token"))
+                .andExpect(status().isOk());
     }
 
     @Test
-    void onlyStudentsCanCompleteLessons() throws Exception {
+    void allAuthenticatedRolesCanCompleteLessons() throws Exception {
         var path = "/api/student/lessons/20000000-0000-0000-0000-000000000001/complete";
         mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
         mockMvc.perform(post(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
-        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
+        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
     }
 
     @Test
-    void onlyStudentsCanAccessStudentExamEndpoints() throws Exception {
+    void allAuthenticatedRolesCanAccessExamParticipationEndpoints() throws Exception {
         mockMvc.perform(get("/api/exams")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/exams").header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
     }
 
     @Test
@@ -183,14 +186,6 @@ class AuthorizationRulesTest {
         mockMvc.perform(post(path).header("Authorization", "Bearer student-token")).andExpect(status().isForbidden());
         mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
         mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
-    }
-
-    @Test
-    void onlyStudentsCanAccessInterviewQuestions() throws Exception {
-        mockMvc.perform(get("/api/interview/questions")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/interview/questions").header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/interview/questions").header("Authorization", "Bearer teacher-token")).andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/interview/questions").header("Authorization", "Bearer admin-token")).andExpect(status().isForbidden());
     }
 
     private AuthenticatedUser principal(UserRole role) {
@@ -240,9 +235,6 @@ class AuthorizationRulesTest {
 
         @PostMapping("/api/teacher/problems")
         public ResponseEntity<Void> createProblem() { return ResponseEntity.ok().build(); }
-
-        @GetMapping("/api/interview/questions")
-        public ResponseEntity<Void> interviewQuestions() { return ResponseEntity.ok().build(); }
 
         @PostMapping("/api/problems/demo/submissions")
         public ResponseEntity<Void> submitProblem() {

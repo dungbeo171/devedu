@@ -92,7 +92,6 @@ Các trang frontend:
 - `/problems` — Programming Problems
 - `/courses` — Lớp học dành cho giáo viên/admin
 - `/exams` — Exam
-- `/interview` — Interview
 
 Đổi cổng host bằng `FRONTEND_PORT`, `BACKEND_PORT` hoặc `POSTGRES_PORT`. Dừng stack bằng `docker compose down`. `docker compose down -v` còn xóa toàn bộ database và workspace volume, vì vậy chỉ dùng khi chủ động muốn xóa dữ liệu local.
 
@@ -190,7 +189,7 @@ Quy tắc quyền:
 
 - `/api/auth/register`, `/api/auth/login`, `/api/system/status`: public.
 - `GET /api/problems`, `GET /api/problems/{slug}`, `GET /api/courses`, `GET /api/courses/{slug}` và `GET /api/lessons/{id}`: public.
-- Submit bài, tiến độ lesson, Exam sinh viên và Interview: chỉ `STUDENT`.
+- Submit bài, tiến độ lesson và tham gia Exam: `STUDENT`, `TEACHER`, `ADMIN`; dữ liệu học tập luôn gắn với chính tài khoản thực hiện.
 - `/api/teacher/**`: `TEACHER` hoặc `ADMIN`.
 - `/api/admin/**`: chỉ `ADMIN`.
 
@@ -274,9 +273,9 @@ Các mã ngôn ngữ hợp lệ: `CPP`, `JAVA`, `PYTHON`, `HTML`, `MYSQL`. Endpo
 
 ## Programming Problems
 
-Trang Bài tập có hàng topic chỉ hiển thị tên, bộ lọc độ khó `Dễ/Trung bình/Khó`, bộ lọc ngôn ngữ, tiến độ và danh sách phân trang cố định 10 bài mỗi trang ngay bên dưới. Mỗi bài chiếm một hàng đầy đủ, hiển thị difficulty cùng các ngôn ngữ được phép; bài đã có submission `ACCEPTED` của sinh viên hiện tại được đánh dấu tích xanh ngay sau khi lưu và trạng thái này vẫn còn sau khi tải lại trang. Dữ liệu khởi tạo có 40 bài (5 bài mỗi topic), mỗi bài có starter code riêng cho từng ngôn ngữ được phép. Trang chi tiết chỉ cho chọn language hợp lệ của bài; backend cũng từ chối language không được phép trước khi chấm. Workspace ưu tiên language/source/input đã autosave theo từng tài khoản/bài; nếu chưa có bản nháp thì nạp starter code của đúng bài và ngôn ngữ.
+Trang Bài tập có hàng topic riêng, sắp xếp, popup tìm kiếm/lọc độ khó/ngôn ngữ/tiến độ và danh sách phân trang cố định 20 bài mỗi trang. Mỗi bài chiếm một hàng gọn, hiển thị acceptance rate dựa trên tỷ lệ lượt chạy thử đạt toàn bộ test case; thống kê được cập nhật nguyên tử và tải theo lô. Bài đã có submission `ACCEPTED` của tài khoản hiện tại được đánh dấu tích xanh ngay sau khi lưu và trạng thái này vẫn còn sau khi tải lại trang. Dữ liệu khởi tạo có 350 bài được phân bổ theo các topic, mỗi bài có starter code riêng cho từng ngôn ngữ được phép và tối thiểu ba test case. Phần **Đề bài** chỉ nêu mục tiêu; định dạng và giới hạn nằm rõ trong **Yêu cầu Input**/**Yêu cầu Output**, tách khỏi **Input mẫu**/**Output mẫu**. Hai khối ví dụ được hiển thị rộng để dễ đối chiếu. Trang chi tiết chỉ cho chọn language hợp lệ của bài; backend cũng từ chối language không được phép trước khi chấm. Workspace ưu tiên language/source/input đã autosave theo từng tài khoản/bài; nếu chưa có bản nháp thì nạp starter code của đúng bài và ngôn ngữ.
 
-Tài khoản `TEACHER` và `ADMIN` có thể đi từ nút **Thêm bài tập** tại `/problems` sang trang riêng `/problems/add`, nhập nội dung, ngôn ngữ được phép, starter code tương ứng cho từng ngôn ngữ và một hoặc nhiều test case ẩn. Problem và test case được lưu trong cùng transaction; API chi tiết chỉ trả starter code công khai, không trả test case hoặc expected output ẩn.
+Tài khoản `TEACHER` và `ADMIN` có thể đi từ nút **Thêm bài tập** tại `/problems` sang trang riêng `/problems/add`, nhập nội dung, yêu cầu Input/Output, ví dụ Input/Output, ngôn ngữ được phép, starter code tương ứng cho từng ngôn ngữ và từ 3 đến 50 test case ẩn. Trang này hỗ trợ tạo thủ công hoặc nhập tối đa 100 bài từ nội dung/file JSON (dùng các khóa `inputDescription`, `outputDescription`, `sampleInput`, `sampleOutput`); JSON được kiểm tra cấu trúc ở frontend rồi sử dụng tuần tự API tạo bài hiện có, không mở thêm bulk API. Problem và test case của từng request được lưu trong cùng transaction; API chi tiết chỉ trả starter code công khai, không trả test case hoặc expected output ẩn.
 
 Tài khoản `ADMIN` có thêm nút **Sửa** và **Xóa** trên từng dòng bài tập. Trang `/problems/{slug}/edit` tải nội dung cùng test case ẩn qua API quản trị; cập nhật thay thế problem/test case trong một transaction. Xóa là xóa mềm để giữ lịch sử submission và bản nháp, nhưng bài biến mất ngay khỏi catalog và không xuất hiện lại sau khi restart.
 
@@ -295,7 +294,7 @@ GET /api/problems
 GET /api/problems?topic=ALGORITHMS&difficulty=HARD&language=PYTHON
 GET /api/problems/{slug}
 POST /api/problems/{slug}/runs
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 
 POST /api/teacher/problems
 GET /api/admin/problems/{slug}
@@ -304,19 +303,19 @@ DELETE /api/admin/problems/{slug}
 Authorization: Bearer <teacher-or-admin-access-token>
 
 GET /api/student/problem-progress
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 
 GET /api/student/problems/{slug}/draft
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 
 PUT /api/student/problems/{slug}/draft
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 Content-Type: application/json
 
 { "language": "PYTHON", "sourceCode": "print('draft')", "input": "sample input" }
 
 POST /api/problems/{slug}/submissions
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 Content-Type: application/json
 
 {
@@ -325,7 +324,7 @@ Content-Type: application/json
 }
 ```
 
-List, filter và detail là public. Submit chỉ chấp nhận JWT role `STUDENT` và trả `200 OK` sau khi chấm:
+List, filter và detail là public. Chạy test (`/runs`) yêu cầu JWT của `STUDENT`, `TEACHER` hoặc `ADMIN` và không tạo submission/tiến độ. Submit chấp nhận cả ba role, lưu kết quả theo chính tài khoản thực hiện và trả `200 OK` sau khi chấm:
 
 ```json
 {
@@ -355,17 +354,17 @@ docker pull alpine:3.23
 docker pull mysql:8.4
 ```
 
-Mỗi compile/run nằm trong container tạm thời với network bị tắt, filesystem gốc read-only, non-root user, toàn bộ Linux capabilities bị drop, `no-new-privileges`, seccomp mặc định và giới hạn CPU/RAM/PID/thời gian/output. Adapter còn giới hạn số execution đồng thời (mặc định 2, cấu hình qua `JUDGE_MAX_CONCURRENT_EXECUTIONS`). Source được mount read-only; expected output chỉ được so sánh ở backend và không được mount vào sandbox. Các cờ này dựa trên [Docker run reference](https://docs.docker.com/reference/cli/docker/container/run), [seccomp guidance](https://docs.docker.com/engine/security/seccomp/) và [resource constraints](https://docs.docker.com/engine/containers/resource_constraints/).
+Mỗi compile/run nằm trong container tạm thời với network bị tắt, filesystem gốc read-only, non-root user, toàn bộ Linux capabilities bị drop, `no-new-privileges`, seccomp mặc định và giới hạn CPU/RAM/PID/thời gian/output. Sandbox mặc định được cấp tối đa một CPU; có thể cấu hình qua `JUDGE_CPUS`. Adapter còn giới hạn số execution đồng thời (mặc định 2, cấu hình qua `JUDGE_MAX_CONCURRENT_EXECUTIONS`). Các test case độc lập chạy qua pool giới hạn này; bài chỉ có một test gộp compile và run trong cùng container để bỏ một lần khởi động container, còn bài nhiều test compile một lần rồi chạy các test song song. Mỗi test vẫn được cô lập và không chia sẻ filesystem ghi được. `executionTimeMillis` đo pha test; ở fast path nó bao gồm cả compile thực hiện trong cùng container. Source được mount read-only; expected output chỉ được so sánh ở backend và không được mount vào sandbox. Các cờ này dựa trên [Docker run reference](https://docs.docker.com/reference/cli/docker/container/run), [seccomp guidance](https://docs.docker.com/engine/security/seccomp/) và [resource constraints](https://docs.docker.com/engine/containers/resource_constraints/).
 
 C++/Java/Python được compile riêng và mỗi test chạy trong container mới. HTML được chấm như static output. Với MySQL, input của test case là setup SQL cho một database tạm thời, còn source sinh viên là query cần chấm.
 
 `CodeJudgeUseCase` và `SandboxExecutionPort` tạo ranh giới độc lập trong modular monolith. Hiện adapter Docker chạy đồng bộ; khi cần scale có thể thay adapter bằng worker/queue mà không đổi API/domain. Production nên cấp một Docker daemon/worker chuyên dụng, ưu tiên rootless; quyền truy cập Docker daemon không nên dùng chung với workload tin cậy.
 
-Frontend lấy access token từ key `devedu.accessToken` (fallback `accessToken`) trong local storage khi submit. Nếu chưa có token hoặc role không phải `STUDENT`, UI hiển thị thông báo tương ứng.
+Frontend lấy access token từ key `devedu.accessToken` (fallback `accessToken`) trong local storage khi chạy test hoặc submit. Chạy test, lưu bản nháp, submit và tiến độ cá nhân dùng được với cả `STUDENT`, `TEACHER` và `ADMIN`.
 
 ## Course/Lesson
 
-Trang `/courses` là màn hình “Lớp học” duy nhất. Giáo viên/admin quản lý sinh viên và gán/gỡ các bài lập trình hiện có. Sinh viên chỉ thấy lớp mình đã được thêm vào, làm bài qua workspace Programming Problems và xem tiến trình `ACCEPTED` theo công thức `số bài đã giải / tổng bài được giao`; ví dụ 1/5 hiển thị 20%. `Teacher Studio` cũ đã được loại bỏ.
+Trang `/courses` là màn hình “Lớp học” duy nhất. Giáo viên/admin có thể chuyển giữa chế độ quản lý và học tập: chế độ quản lý cho phép quản lý sinh viên, gán/gỡ bài lập trình và xem tiến trình; chế độ học tập cho phép mở bài và lưu tiến độ như sinh viên. Giáo viên thấy lớp mình sở hữu hoặc đã tham gia, admin có thể học trên mọi lớp. Tiến trình `ACCEPTED` tính theo `số bài đã giải / tổng bài được giao`; ví dụ 1/5 hiển thị 20%. `Teacher Studio` cũ đã được loại bỏ.
 
 Thao tác sửa sinh viên trong lớp chỉ đổi tên hiển thị của enrollment; thông tin tài khoản toàn cục và email của sinh viên không bị thay đổi.
 
@@ -386,6 +385,7 @@ POST /api/teacher/courses/{courseId}/topics
 POST /api/teacher/topics/{topicId}/lessons
 PUT  /api/teacher/lessons/{lessonId}/video
 GET  /api/teacher/courses/{courseId}/students
+GET  /api/teacher/courses/{courseId}/student-progress
 POST /api/teacher/courses/{courseId}/students
 GET  /api/teacher/courses/{courseId}/student-candidates?q={query}
 POST /api/teacher/courses/{courseId}/students/bulk
@@ -406,18 +406,18 @@ Import sinh viên dùng file `.txt` UTF-8, mỗi dòng một mã `SV...` (cũng 
 POST /api/student/lessons/{lessonId}/complete
 GET  /api/courses/{courseId}/materials
 GET  /api/course-materials/{materialId}/content
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 ```
 
-API lớp học dành cho sinh viên:
+API chế độ học tập của lớp (cả ba role đã xác thực):
 
 ```http
 GET /api/student/courses
 GET /api/student/courses/{courseId}
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 ```
 
-Hai endpoint tài liệu chỉ cho sinh viên đã được thêm vào lớp; giáo viên sở hữu và admin cũng có quyền truy cập.
+Hai endpoint tài liệu cho tài khoản đã được thêm vào lớp ở bất kỳ role nào; giáo viên sở hữu và admin cũng có quyền truy cập.
 
 Frontend đọc token từ `devedu.accessToken` (fallback `accessToken`) cho các thao tác được bảo vệ.
 
@@ -435,7 +435,7 @@ GET  /api/teacher/exams/{examId}/results
 Authorization: Bearer <teacher-access-token>
 ```
 
-API sinh viên:
+API tham gia kỳ thi (cả ba role đã xác thực):
 
 ```http
 GET  /api/exams
@@ -445,23 +445,10 @@ GET  /api/exams/attempts/{attemptId}
 PUT  /api/exams/attempts/{attemptId}/answers/{questionId}
 POST /api/exams/attempts/{attemptId}/submit
 GET  /api/exams/attempts/{attemptId}/result
-Authorization: Bearer <student-access-token>
+Authorization: Bearer <access-token>
 ```
 
 Multiple Choice được chấm tự động khi nộp bài. Câu Coding chỉ lưu source code và được báo `pendingCodingQuestions`; project chưa có code judge hoặc workflow chấm tay. Đáp án đúng không được trả trong API sinh viên trước hoặc sau khi thi.
-
-## Interview
-
-Trang Interview dành cho sinh viên, hỗ trợ lọc đồng thời theo topic và difficulty rồi mở đáp án/giải thích của từng câu hỏi.
-
-```http
-GET /api/interview/questions
-GET /api/interview/questions?topic=JAVA&difficulty=MEDIUM
-GET /api/interview/questions/{questionId}
-Authorization: Bearer <student-access-token>
-```
-
-Các topic: `JAVA`, `PYTHON`, `CPP`, `OOP`, `SQL`, `DATABASE`, `DATA_STRUCTURES`, `ALGORITHMS`, `WEB`. Difficulty: `EASY`, `MEDIUM`, `HARD`. Database có sẵn một câu hỏi seed cho mỗi topic.
 
 ### 3. Frontend
 
@@ -495,4 +482,4 @@ npm audit
 
 ## Phạm vi hiện tại
 
-Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Course/Lesson, Exam, Interview và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.
+Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Course/Lesson, Exam và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.

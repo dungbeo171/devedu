@@ -6,6 +6,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @Repository
@@ -38,6 +40,16 @@ public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepo
     @Override
     public Set<UUID> findAcceptedProblemIdsByStudentId(UUID studentId) {
         return new LinkedHashSet<>(repository.findAcceptedProblemIdsByStudentId(studentId));
+    }
+
+    @Override
+    public Map<UUID, Set<UUID>> findAcceptedProblemIdsByStudentIds(Set<UUID> studentIds) {
+        var result = new LinkedHashMap<UUID, Set<UUID>>();
+        studentIds.forEach(studentId -> result.put(studentId, new LinkedHashSet<>()));
+        if (studentIds.isEmpty()) return result;
+        repository.findAcceptedProblemIdsByStudentIds(studentIds)
+                .forEach(pair -> result.get(pair.getStudentId()).add(pair.getProblemId()));
+        return result;
     }
 
     private ProblemSubmission toDomain(ProblemSubmissionJpaEntity entity) {

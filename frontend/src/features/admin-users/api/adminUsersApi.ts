@@ -18,6 +18,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.status === 403) throw new Error('Chỉ ADMIN có thể quản lý người dùng.')
     throw new Error(body?.message ?? 'Không thể xử lý yêu cầu quản trị.')
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -30,4 +31,18 @@ export const updateManagedUserRole = (userId: number, role: UserRole) => request
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ role }),
   },
+)
+
+export const updateManagedUser = (userId: number, body: { name: string; email: string; password?: string; role: UserRole }) => request<ManagedUser>(
+  `/api/admin/users/${encodeURIComponent(userId)}`,
+  {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  },
+)
+
+export const deleteManagedUser = (userId: number) => request<void>(
+  `/api/admin/users/${encodeURIComponent(userId)}`,
+  { method: 'DELETE' },
 )

@@ -32,6 +32,7 @@ public class AdminProgrammingProblemsController {
         var problem = managed.problem();
         return new ManagedProgrammingProblemResponse(
                 problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
+                problem.inputDescription(), problem.outputDescription(),
                 problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
                 problem.allowedLanguages(), problem.starterCodes(), problem.createdAt(),
                 managed.testCases().stream()
@@ -48,11 +49,13 @@ public class AdminProgrammingProblemsController {
     ) {
         var problem = useCase.update(new UpdateProgrammingProblemCommand(
                 slug, request.slug(), request.title(), request.summary(), request.description(),
-                request.sampleInput(), request.sampleOutput(), request.topic(), request.difficulty(),
+                request.inputDescription(), request.outputDescription(), request.sampleInput(), request.sampleOutput(),
+                request.topic(), request.difficulty(),
                 request.allowedLanguages(), request.starterCodes(), toTestCases(request)
         ));
         return new ProgrammingProblemDetailResponse(
                 problem.id(), problem.slug(), problem.title(), problem.summary(), problem.description(),
+                problem.inputDescription(), problem.outputDescription(),
                 problem.sampleInput(), problem.sampleOutput(), problem.topic(), problem.difficulty(),
                 problem.allowedLanguages(), problem.starterCodes(), problem.createdAt()
         );

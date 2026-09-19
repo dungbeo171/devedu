@@ -20,13 +20,13 @@ public class StudentCoursesController {
     private final CourseClassroomUseCase useCase;
     public StudentCoursesController(CourseClassroomUseCase useCase) { this.useCase = useCase; }
     @GetMapping
-    public List<StudentCourseResponse> list(@AuthenticationPrincipal AuthenticatedUser student) {
-        return useCase.listStudentCourses(student.id()).stream().map(StudentCourseResponse::from).toList();
+    public List<StudentCourseResponse> list(@AuthenticationPrincipal AuthenticatedUser actor) {
+        return useCase.listStudentCourses(actor.id(), actor.role()).stream().map(StudentCourseResponse::from).toList();
     }
     @GetMapping("/{courseId}")
     public StudentCourseDetailsResponse details(@PathVariable UUID courseId,
-            @AuthenticationPrincipal AuthenticatedUser student) {
-        var details = useCase.getStudentCourse(student.id(), courseId);
+            @AuthenticationPrincipal AuthenticatedUser actor) {
+        var details = useCase.getStudentCourse(actor.id(), actor.role(), courseId);
         return new StudentCourseDetailsResponse(StudentCourseResponse.from(details.summary()),
                 details.problems().stream().map(CourseProblemResponse::from).toList());
     }

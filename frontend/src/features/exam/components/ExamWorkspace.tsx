@@ -133,7 +133,7 @@ export function ExamWorkspace({
             className="ui-panel p-6 sm:p-7"
           >
             <div className="flex items-start justify-between gap-4">
-              <p className="text-sm font-bold leading-6 text-slate-950">
+              <p className="whitespace-pre-wrap text-sm font-bold leading-6 text-slate-950">
                 <span className="mr-2 inline-block rounded-lg border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 font-mono text-xs font-bold text-blue-400">
                   Câu {question.position}
                 </span>

@@ -44,7 +44,7 @@ class CourseClassroomServiceTest {
             if (index == 1) submissions.accepted.add(problem.id());
         }
 
-        var details = service.getStudentCourse(STUDENT, COURSE);
+        var details = service.getStudentCourse(STUDENT, UserRole.STUDENT, COURSE);
 
         assertThat(details.summary().solvedProblems()).isEqualTo(1);
         assertThat(details.summary().totalProblems()).isEqualTo(5);
@@ -54,8 +54,18 @@ class CourseClassroomServiceTest {
 
     @Test
     void studentCannotOpenCourseWithoutEnrollment() {
-        assertThatThrownBy(() -> service.getStudentCourse(STUDENT, COURSE))
+        assertThatThrownBy(() -> service.getStudentCourse(STUDENT, UserRole.STUDENT, COURSE))
                 .isInstanceOf(CourseManagementForbiddenException.class);
+    }
+
+    @Test
+    void teacherAndAdminCanUseTheLearningViewWithoutEnrollment() {
+        assertThat(service.getStudentCourse(TEACHER, UserRole.TEACHER, COURSE).summary().course().id())
+                .isEqualTo(COURSE);
+        assertThat(service.listStudentCourses(TEACHER, UserRole.TEACHER))
+                .extracting(item -> item.course().id()).containsExactly(COURSE);
+        assertThat(service.listStudentCourses(UUID.randomUUID(), UserRole.ADMIN))
+                .extracting(item -> item.course().id()).containsExactly(COURSE);
     }
 
     @Test
@@ -69,9 +79,31 @@ class CourseClassroomServiceTest {
         assertThat(service.removeProblem(command)).isEmpty();
     }
 
+    @Test
+    void teacherSeesProgressForEveryEnrolledStudent() {
+        enrollments.enrolled = true;
+        for (int index = 1; index <= 5; index++) {
+            var problem = problem(index);
+            problems.values.put(problem.id(), problem);
+            assignments.values.add(new CourseProblemAssignment(COURSE, problem.id(), NOW));
+            if (index == 1) submissions.accepted.add(problem.id());
+        }
+
+        var progress = service.listStudentProgress(new com.devedu.learningplatform.application.port.in.command.ManageCourseCommand(
+                TEACHER, UserRole.TEACHER, COURSE));
+
+        assertThat(progress).singleElement().satisfies(student -> {
+            assertThat(student.student().studentCode()).isEqualTo("SV000002");
+            assertThat(student.solvedProblems()).isEqualTo(1);
+            assertThat(student.totalProblems()).isEqualTo(5);
+            assertThat(student.progressPercent()).isEqualTo(20);
+        });
+    }
+
     private ProgrammingProblem problem(int index) {
         return new ProgrammingProblem(UUID.randomUUID(), "bai-" + index, "Bài " + index, "Tóm tắt", "Đề bài",
-                "", "", ProblemTopic.JAVA, ProblemDifficulty.EASY, Set.of(CodeLanguage.JAVA),
+                "Một dòng chứa dữ liệu đầu vào.", "In kết quả trên một dòng.", "", "",
+                ProblemTopic.JAVA, ProblemDifficulty.EASY, Set.of(CodeLanguage.JAVA),
                 Map.of(CodeLanguage.JAVA, "class Main {}"), NOW);
     }
 
@@ -83,6 +115,7 @@ class CourseClassroomServiceTest {
         public List<Course> findAll() { return List.of(course); }
         public Optional<Course> findById(UUID id) { return id.equals(COURSE) ? Optional.of(course) : Optional.empty(); }
         public Optional<Course> findBySlug(String slug) { return Optional.of(course); }
+        public void deleteById(UUID id) {}
     }
     private static final class TestEnrollments implements CourseEnrollmentRepository {
         boolean enrolled;
@@ -118,7 +151,7 @@ class CourseClassroomServiceTest {
         public Optional<User> findById(UUID id) { return id.equals(TEACHER) ? Optional.of(new User(TEACHER, 1, null, "GV000001", "Nguyễn Văn A", "teacher@example.com", "hash", UserRole.TEACHER, NOW)) : Optional.empty(); }
         public Optional<User> findByPublicId(long id) { return Optional.empty(); }
         public Optional<User> findByStudentCode(String code) { return Optional.empty(); }
-        public List<User> findAll() { return List.of(); }
+        public List<User> findAll() { return List.of(new User(STUDENT, 2, "SV000002", null, "Nguyễn Văn B", "student@example.com", "hash", UserRole.STUDENT, NOW)); }
         public User save(User user) { return user; }
         public void deleteById(UUID id) {}
     }

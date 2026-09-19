@@ -26,10 +26,16 @@ import com.devedu.learningplatform.application.port.in.result.ManagedCourse;
 import com.devedu.learningplatform.application.port.in.result.EnrolledCourseStudent;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseStudentsCommand;
 import com.devedu.learningplatform.application.port.in.command.UpdateCourseStudentCommand;
+import com.devedu.learningplatform.application.port.in.command.UpdateCourseCommand;
+import com.devedu.learningplatform.application.port.in.command.DeleteCourseCommand;
 
 public interface CourseLearningUseCase {
 
     Course createCourse(CreateCourseCommand command);
+
+    Course updateCourse(UpdateCourseCommand command);
+
+    void deleteCourse(DeleteCourseCommand command);
 
     CourseTopic createTopic(CreateCourseTopicCommand command);
 

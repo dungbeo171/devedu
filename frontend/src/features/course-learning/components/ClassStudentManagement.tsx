@@ -3,8 +3,10 @@ import { addCourseStudents, removeCourseStudents, searchCourseStudentCandidates,
 import type { CourseStudent, CourseStudentCandidate, ManagedCourse } from '../types/courseLearning'
 import { TeacherCourseProblems } from './TeacherCourseProblems'
 import { ModalDialog } from '../../../shared/components/ModalDialog'
+import { TeacherStudentProgress } from './TeacherStudentProgress'
 
-type ClassTab = 'STUDENTS' | 'PROBLEMS'
+type ClassTab = 'STUDENTS' | 'PROBLEMS' | 'PROGRESS'
+type NoticeTone = 'success' | 'error'
 type Removal = { ids: number[]; studentName?: string }
 const PAGE_SIZE = 10
 
@@ -15,7 +17,7 @@ export function ClassStudentManagement({ course, students, loading, error, onBac
   error: string
   onBack: () => void
   onRoster: (students: CourseStudent[]) => void
-  onToast: (message: string) => void
+  onToast: (message: string, tone?: NoticeTone) => void
   onRetry: () => void
 }) {
   const [tab, setTab] = useState<ClassTab>('STUDENTS')
@@ -51,7 +53,7 @@ export function ClassStudentManagement({ course, students, loading, error, onBac
       setRemoval(null)
       onToast(removal.ids.length === 1 ? 'Đã xóa sinh viên khỏi lớp' : 'Đã xóa các sinh viên đã chọn')
     } catch (reason) {
-      onToast(errorMessage(reason, 'Không thể xóa sinh viên.'))
+      onToast(errorMessage(reason, 'Không thể xóa sinh viên.'), 'error')
     } finally {
       setRemoving(false)
     }
@@ -60,11 +62,11 @@ export function ClassStudentManagement({ course, students, loading, error, onBac
     if (!editing || !editName.trim()) return
     setEditBusy(true)
     try { onRoster(await updateCourseStudent(course.id, editing.id, editName.trim())); setEditing(null); onToast('Đã cập nhật sinh viên') }
-    catch (reason) { onToast(errorMessage(reason, 'Không thể cập nhật sinh viên.')) }
+    catch (reason) { onToast(errorMessage(reason, 'Không thể cập nhật sinh viên.'), 'error') }
     finally { setEditBusy(false) }
   }
 
-  const tabs: [ClassTab, string][] = [['STUDENTS', 'Sinh viên'], ['PROBLEMS', 'Bài tập']]
+  const tabs: [ClassTab, string][] = [['STUDENTS', 'Sinh viên'], ['PROBLEMS', 'Bài tập'], ['PROGRESS', 'Tiến trình']]
 
   return <>
     <button type="button" onClick={onBack} className="mb-4 cursor-pointer text-sm font-bold text-blue-700 hover:text-blue-900">← Danh sách lớp học</button>
@@ -88,7 +90,7 @@ export function ClassStudentManagement({ course, students, loading, error, onBac
       {tabs.map(([value, label]) => <button key={value} type="button" onClick={() => setTab(value)} className={`shrink-0 cursor-pointer border-b-2 px-4 py-3 text-sm font-bold ${tab === value ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-blue-700'}`}>{label}</button>)}
     </nav>
 
-    {tab === 'PROBLEMS' ? <TeacherCourseProblems course={course} onToast={onToast} /> : <section className="mt-6" aria-label="Danh sách sinh viên">
+    {tab === 'PROBLEMS' ? <TeacherCourseProblems course={course} onToast={onToast} /> : tab === 'PROGRESS' ? <TeacherStudentProgress course={course} /> : <section className="mt-6" aria-label="Danh sách sinh viên">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <Search value={query} onChange={setQuery} />
         <select value={status} onChange={(event) => setStatus(event.target.value as 'ALL' | 'ACTIVE')} className="ui-control w-full cursor-pointer font-semibold sm:w-auto">
@@ -127,7 +129,7 @@ export function ClassStudentManagement({ course, students, loading, error, onBac
   </>
 }
 
-function AddStudentsModal({ course, onClose, onAdded, onNotice }: { course: ManagedCourse; onClose: () => void; onAdded: (students: CourseStudent[]) => void; onNotice: (message: string) => void }) {
+function AddStudentsModal({ course, onClose, onAdded, onNotice }: { course: ManagedCourse; onClose: () => void; onAdded: (students: CourseStudent[]) => void; onNotice: (message: string, tone?: NoticeTone) => void }) {
   const [tab, setTab] = useState<'SEARCH' | 'INVITE'>('SEARCH')
   const [query, setQuery] = useState('')
   const [students, setStudents] = useState<CourseStudentCandidate[]>([])
@@ -147,7 +149,7 @@ function AddStudentsModal({ course, onClose, onAdded, onNotice }: { course: Mana
     return () => { active = false; clearTimeout(timer) }
   }, [course.id, query, tab])
   async function add() { if (!selected.size) return; setSaving(true); setError(''); try { onAdded(await addCourseStudents(course.id, [...selected])) } catch (reason) { setError(errorMessage(reason, 'Không thể thêm sinh viên.')); setSaving(false) } }
-  async function copyCode() { try { await navigator.clipboard.writeText(course.code); onNotice('Đã sao chép mã lớp') } catch { onNotice('Không thể sao chép mã lớp') } }
+  async function copyCode() { try { await navigator.clipboard.writeText(course.code); onNotice('Đã sao chép mã lớp') } catch { onNotice('Không thể sao chép mã lớp', 'error') } }
 
   return <ModalDialog title="Thêm sinh viên vào lớp" onClose={() => !saving && onClose()}>
     <div className="flex border-b border-slate-100 px-5 pt-2 sm:px-6"><ModalTab active={tab === 'SEARCH'} onClick={() => setTab('SEARCH')}>Tìm kiếm sinh viên</ModalTab><ModalTab active={tab === 'INVITE'} onClick={() => setTab('INVITE')}>Mời bằng mã lớp</ModalTab></div>
@@ -161,7 +163,7 @@ function AddStudentsModal({ course, onClose, onAdded, onNotice }: { course: Mana
 
 function ConfirmationDialog({ title, message, busy, onCancel, onConfirm }: { title: string; message: string; busy: boolean; onCancel: () => void; onConfirm: () => void }) { return <ModalDialog title={title} onClose={onCancel}><div className="p-5 sm:p-6"><p className="leading-6 text-slate-600">{message}</p><div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} disabled={busy} className="ui-button-secondary">Hủy</button><button type="button" onClick={onConfirm} disabled={busy} className="ui-button-danger bg-red-600 text-white hover:bg-red-700">{busy ? 'Đang xóa...' : 'Xóa sinh viên'}</button></div></div></ModalDialog> }
 function ModalTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) { return <button type="button" onClick={onClick} className={`cursor-pointer border-b-2 px-3 py-3 text-sm font-bold ${active ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-blue-700'}`}>{children}</button> }
-function Search({ value, onChange, longPlaceholder = false }: { value: string; onChange: (value: string) => void; longPlaceholder?: boolean }) { return <label className="relative block w-full flex-1 lg:max-w-md"><span className="sr-only">Tìm kiếm sinh viên</span><span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">⌕</span><input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={longPlaceholder ? 'Tìm kiếm theo tên, email hoặc mã sinh viên...' : 'Tìm kiếm sinh viên...'} className="ui-control pl-10" /></label> }
+function Search({ value, onChange, longPlaceholder = false }: { value: string; onChange: (value: string) => void; longPlaceholder?: boolean }) { return <label className="relative block w-full flex-1 lg:max-w-md"><span className="sr-only">Tìm kiếm sinh viên</span><span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">⌕</span><input type="search" value={value} onChange={(event) => onChange(event.target.value)} placeholder={longPlaceholder ? 'Tìm kiếm theo tên, email hoặc mã sinh viên...' : 'Tìm kiếm sinh viên...'} className="ui-control ui-control-with-leading-icon" /></label> }
 function StudentCheckbox({ student, selected, setSelected }: { student: CourseStudent; selected: Set<number>; setSelected: React.Dispatch<React.SetStateAction<Set<number>>> }) { return <input aria-label={`Chọn ${student.name}`} type="checkbox" checked={selected.has(student.id)} onChange={() => toggleStudent(student.id, selected, setSelected)} className="h-4 w-4 cursor-pointer accent-blue-600" /> }
 function toggleStudent(id: number, selected: Set<number>, setSelected: React.Dispatch<React.SetStateAction<Set<number>>>) { const next = new Set(selected); next.has(id) ? next.delete(id) : next.add(id); setSelected(next) }
 function Pagination({ page, pages, total, filteredTotal, onPage }: { page: number; pages: number; total: number; filteredTotal: number; onPage: (page: number) => void }) { return <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="text-center text-slate-600 sm:text-left">Tổng số: <b className="text-slate-900">{total} sinh viên</b>{filteredTotal !== total ? ` · ${filteredTotal} kết quả` : ''}</span><div className="flex items-center justify-center gap-2"><button type="button" disabled={page === 1} onClick={() => onPage(page - 1)} className="min-h-9 cursor-pointer rounded-lg border border-slate-200 px-3 font-bold text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40">Previous</button><span className="min-w-20 text-center font-bold text-blue-700">{page} / {pages}</span><button type="button" disabled={page === pages} onClick={() => onPage(page + 1)} className="min-h-9 cursor-pointer rounded-lg border border-slate-200 px-3 font-bold text-slate-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></div> }

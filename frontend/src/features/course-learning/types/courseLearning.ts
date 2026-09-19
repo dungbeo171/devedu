@@ -81,6 +81,17 @@ export interface CourseStudentCandidate {
   email: string
 }
 
+export interface CourseStudentProgress {
+  id: number
+  studentCode: string
+  name: string
+  email: string
+  joinedAt: string
+  solvedProblems: number
+  totalProblems: number
+  progressPercent: number
+}
+
 export interface CourseProblem {
   id: string
   slug: string

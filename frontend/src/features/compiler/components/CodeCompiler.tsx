@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SmartCodeEditor } from '../../../shared/components/SmartCodeEditor'
+import { HtmlPreview } from '../../../shared/components/HtmlPreview'
 import { executeCode } from '../api/executeCode'
 import type { CodeLanguage } from '../types/codeExecution'
 import { IconChevronDown, IconPlay, IconTerminal } from '../../../shared/components/Icons'
@@ -85,6 +86,7 @@ export function CodeCompiler() {
   const [code, setCode] = useState(languages[0].sample)
   const [input, setInput] = useState('')
   const [output, setOutput] = useState(initialOutput)
+  const [htmlPreview, setHtmlPreview] = useState('')
   const [isRunning, setIsRunning] = useState(false)
 
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0]
@@ -97,6 +99,7 @@ export function CodeCompiler() {
     setCode(nextOption.sample)
     setInput('')
     setOutput(initialOutput)
+    setHtmlPreview('')
   }
 
   async function runCode() {
@@ -104,12 +107,15 @@ export function CodeCompiler() {
 
     setIsRunning(true)
     setOutput('Đang thực thi chương trình...')
+    setHtmlPreview('')
     try {
       const effectiveInput = input.trim() ? input : selectedLanguage.defaultInput
       const result = await executeCode({ language, code, input: effectiveInput })
       setOutput(`[${result.status}]\n${result.output}`)
+      if (language === 'HTML' && result.status === 'SUCCESS') setHtmlPreview(result.output)
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Đã có lỗi xảy ra khi thực thi.')
+      setHtmlPreview('')
     } finally {
       setIsRunning(false)
     }
@@ -117,15 +123,15 @@ export function CodeCompiler() {
 
   return (
     <section>
-      <header className="ui-page-header mb-6">
+      <header className="ui-page-header mb-5">
         <div>
           <p className="ui-kicker"><IconTerminal className="h-4 w-4" /> Không gian thực hành</p>
           <h1 className="ui-page-title mt-2">Trình biên dịch trực tuyến</h1>
           <p className="ui-page-description">Viết, chạy và kiểm tra mã nguồn trong một workspace tập trung.</p>
         </div>
       </header>
-      <div className="overflow-hidden rounded-[18px] border border-slate-300 bg-white text-slate-900 shadow-[0_18px_45px_-24px_rgba(15,23,42,.28)]">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-[#fafafa] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
@@ -133,7 +139,7 @@ export function CodeCompiler() {
             <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
           </div>
           <span className="hidden h-4 w-px bg-blue-200 sm:block" />
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs">
+          <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
             <IconTerminal className="h-3.5 w-3.5 text-blue-600" />
             <span className="truncate font-mono text-slate-500">
               workspace / <span className="font-semibold text-blue-700">{selectedLanguage.extension}</span>
@@ -149,7 +155,7 @@ export function CodeCompiler() {
               id="language"
               value={language}
               onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}
-              className="min-h-10 appearance-none rounded-[10px] border border-slate-300 bg-white py-1.5 pl-3.5 pr-8 font-mono text-xs font-bold text-blue-700 outline-none transition hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              className="min-h-9 appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 font-mono text-xs font-semibold text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
             >
               {languages.map((item) => (
                 <option key={item.value} value={item.value} className="bg-white text-blue-700">
@@ -185,7 +191,7 @@ export function CodeCompiler() {
       </div>
 
       {/* Editor & Terminal Layout */}
-      <div className="grid min-h-[600px] lg:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
+      <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1.72fr)_minmax(300px,0.78fr)]">
         {/* Left: Code Editor Panel */}
         <div className="flex min-h-[460px] flex-col border-b border-blue-100 lg:border-r lg:border-b-0">
           <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white px-4 py-2 text-xs">
@@ -231,6 +237,7 @@ export function CodeCompiler() {
                 <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100">Kết quả</span>
               </div>
             </div>
+            {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} /> : null}
             <pre
               aria-live="polite"
               className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-white selection:bg-blue-600/30"

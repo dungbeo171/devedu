@@ -32,8 +32,8 @@ export function LessonViewer({ lessonId, onBack }: LessonViewerProps) {
       setMessage('Đã đánh dấu bài học hoàn thành.')
     } catch (error) {
       const code = error instanceof Error ? error.message : ''
-      setMessage(code === 'AUTHENTICATION_REQUIRED' ? 'Hãy đăng nhập bằng tài khoản sinh viên.' :
-        code === 'ROLE_REQUIRED' ? 'Chức năng này chỉ dành cho sinh viên.' : code)
+      setMessage(code === 'AUTHENTICATION_REQUIRED' ? 'Hãy đăng nhập để cập nhật tiến độ.' :
+        code === 'ROLE_REQUIRED' ? 'Tài khoản hiện tại không có quyền cập nhật tiến độ.' : code)
     }
   }
 

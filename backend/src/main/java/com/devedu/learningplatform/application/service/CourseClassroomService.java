@@ -6,6 +6,7 @@ import com.devedu.learningplatform.application.port.in.CourseClassroomUseCase;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseCommand;
 import com.devedu.learningplatform.application.port.in.command.ManageCourseProblemCommand;
 import com.devedu.learningplatform.application.port.in.result.CourseProblemProgress;
+import com.devedu.learningplatform.application.port.in.result.CourseStudentProgress;
 import com.devedu.learningplatform.application.port.in.result.StudentCourseDetails;
 import com.devedu.learningplatform.application.port.in.result.StudentCourseSummary;
 import com.devedu.learningplatform.application.port.out.CourseEnrollmentRepository;
@@ -49,21 +50,32 @@ public final class CourseClassroomService implements CourseClassroomUseCase {
     }
 
     @Override
-    public List<StudentCourseSummary> listStudentCourses(UUID studentId) {
-        Objects.requireNonNull(studentId, "Student id is required");
-        var accepted = submissionRepository.findAcceptedProblemIdsByStudentId(studentId);
-        return enrollmentRepository.findCourseIdsByStudentId(studentId).stream()
+    public List<StudentCourseSummary> listStudentCourses(UUID actorId, UserRole actorRole) {
+        Objects.requireNonNull(actorId, "Actor id is required");
+        Objects.requireNonNull(actorRole, "Actor role is required");
+        var courseIds = new java.util.LinkedHashSet<>(enrollmentRepository.findCourseIdsByStudentId(actorId));
+        if (actorRole == UserRole.TEACHER) {
+            courseRepository.findByTeacherId(actorId).stream().map(Course::id).forEach(courseIds::add);
+        } else if (actorRole == UserRole.ADMIN) {
+            courseRepository.findAll().stream().map(Course::id).forEach(courseIds::add);
+        }
+        var accepted = submissionRepository.findAcceptedProblemIdsByStudentId(actorId);
+        return courseIds.stream()
                 .map(this::getCourse).map(course -> summary(course, accepted)).toList();
     }
 
     @Override
-    public StudentCourseDetails getStudentCourse(UUID studentId, UUID courseId) {
-        Objects.requireNonNull(studentId, "Student id is required");
+    public StudentCourseDetails getStudentCourse(UUID actorId, UserRole actorRole, UUID courseId) {
+        Objects.requireNonNull(actorId, "Actor id is required");
+        Objects.requireNonNull(actorRole, "Actor role is required");
         var course = getCourse(courseId);
-        if (!enrollmentRepository.existsByCourseIdAndStudentId(course.id(), studentId)) {
+        var canLearn = enrollmentRepository.existsByCourseIdAndStudentId(course.id(), actorId)
+                || actorRole == UserRole.ADMIN
+                || (actorRole == UserRole.TEACHER && course.teacherId().equals(actorId));
+        if (!canLearn) {
             throw new CourseManagementForbiddenException();
         }
-        var accepted = submissionRepository.findAcceptedProblemIdsByStudentId(studentId);
+        var accepted = submissionRepository.findAcceptedProblemIdsByStudentId(actorId);
         var problems = assignmentRepository.findAllByCourseId(course.id()).stream()
                 .map(item -> new CourseProblemProgress(getProblem(item.problemId()), item.assignedAt(), accepted.contains(item.problemId())))
                 .toList();
@@ -92,6 +104,27 @@ public final class CourseClassroomService implements CourseClassroomUseCase {
         var course = requireManager(command.actorId(), command.actorRole(), command.courseId());
         assignmentRepository.deleteByCourseIdAndProblemId(course.id(), command.problemId());
         return listManagedProblems(new ManageCourseCommand(command.actorId(), command.actorRole(), course.id()));
+    }
+
+    @Override
+    public List<CourseStudentProgress> listStudentProgress(ManageCourseCommand command) {
+        var course = requireManager(command.actorId(), command.actorRole(), command.courseId());
+        var enrollments = enrollmentRepository.findAllByCourseId(course.id());
+        var studentIds = enrollments.stream().map(enrollment -> enrollment.studentId())
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        var usersById = userRepository.findAllByIds(List.copyOf(studentIds)).stream()
+                .collect(java.util.stream.Collectors.toMap(User::id, user -> user));
+        var acceptedByStudent = submissionRepository.findAcceptedProblemIdsByStudentIds(studentIds);
+        var assignedProblemIds = assignmentRepository.findAllByCourseId(course.id()).stream()
+                .map(CourseProblemAssignment::problemId).collect(java.util.stream.Collectors.toSet());
+        return enrollments.stream().map(enrollment -> {
+            var student = java.util.Optional.ofNullable(usersById.get(enrollment.studentId()))
+                    .orElseThrow(() -> new CourseResourceNotFoundException("Student", enrollment.studentId()));
+            var solved = (int) acceptedByStudent.getOrDefault(student.id(), Set.of()).stream()
+                    .filter(assignedProblemIds::contains).count();
+            return new CourseStudentProgress(student, enrollment.enrolledAt(), enrollment.displayName(),
+                    solved, assignedProblemIds.size());
+        }).toList();
     }
 
     private StudentCourseSummary summary(Course course, Set<UUID> accepted) {

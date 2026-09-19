@@ -71,6 +71,7 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - `CodeJudgeUseCase` là input port độc lập; `SandboxExecutionPort` là output port tách application khỏi cách thực thi. `DockerSandboxExecutionAdapter` nằm trong `infrastructure/judge`.
 - Code người dùng không được compile, load hoặc chạy trong JVM/Spring Boot. Chỉ adapter judge được phép khởi tạo Docker CLI bằng danh sách argument cố định; không ghép source code, input hay test case vào host shell command.
 - Mỗi lần compile/run dùng container tạm thời, không network, root filesystem read-only, non-root user, drop toàn bộ capability, `no-new-privileges`, seccomp mặc định và giới hạn CPU, RAM, PID, thời gian, output. Tổng số execution đồng thời cũng phải bị giới hạn. Không dùng `--privileged`, host network hoặc mount Docker socket vào sandbox.
+- Các test case độc lập có thể chạy song song bằng pool giới hạn toàn cục theo `max-concurrent-executions`; mỗi test vẫn dùng container riêng và không chia sẻ filesystem ghi được. Với bài chỉ có một test, bước compile và run được gộp trong cùng container để tránh một lần khởi tạo container; bài có nhiều test vẫn compile một lần rồi chạy test song song. `executionTimeMillis` của kết quả judge đo pha chạy test; với fast path này thời gian bao gồm cả compile trong cùng container.
 - Source chỉ được mount read-only. Expected output không bao giờ được đưa vào sandbox. Image phải được chuẩn bị trước; request không được tự pull image (`--pull=never`).
 - C++/Java/Python compile riêng rồi chạy từng test case trong container mới. HTML được so sánh như static output. MySQL dùng database tạm thời trong container riêng cho từng test case; input test là setup SQL.
 - Adapter hiện chạy đồng bộ trong modular monolith. Giữ contract application độc lập để sau này có thể thay bằng worker/queue mà không đổi domain hoặc presentation; không tự ý tách thành Microservice.
@@ -89,24 +90,26 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 ### Programming Problems
 
 - Domain gồm `ProgrammingProblem`, `ProblemTopic`, `ProblemDifficulty`, `ProblemTestCase`, `ProblemSubmission` và `ProblemDraft`. Mỗi problem khai báo tập `CodeLanguage` được phép.
+- `ProgrammingProblem` lưu riêng `inputDescription`/`outputDescription` (yêu cầu định dạng) với `sampleInput`/`sampleOutput` (ví dụ minh họa); không dùng dữ liệu mẫu thay cho yêu cầu bài.
 - Mỗi problem lưu `starterCodes` theo từng `CodeLanguage` được phép. API chi tiết trả starter code công khai; mỗi ngôn ngữ được phép phải có template không rỗng và form `/problems/add` cho phép giáo viên/admin chỉnh từng template.
-- Application input port hỗ trợ list, filter đồng thời theo topic/difficulty/language, lấy detail, tạo bài, submit và đọc danh sách bài đã giải của sinh viên; persistence chỉ đi qua output port.
+- Application input port hỗ trợ list, filter đồng thời theo topic/difficulty/language, lấy detail, tạo bài, submit và đọc danh sách bài đã giải của người dùng; persistence chỉ đi qua output port.
 - JPA entities/adapters nằm trong `infrastructure/persistence/problem`; REST DTO/controller nằm trong `presentation`.
-- Danh sách và chi tiết bài tập là public. Submit yêu cầu JWT có role `STUDENT`.
-- `POST /api/teacher/problems` cho phép `TEACHER` và `ADMIN` tạo bài cùng ít nhất một test case ẩn. Problem và test case phải được lưu atomically; `STUDENT` không được gọi endpoint này.
+- Danh sách và chi tiết bài tập là public. Submit yêu cầu JWT hợp lệ và cho phép `STUDENT`, `TEACHER`, `ADMIN`; tiến độ được lưu riêng theo chính tài khoản thực hiện.
+- `POST /api/teacher/problems` cho phép `TEACHER` và `ADMIN` tạo bài cùng ít nhất ba test case ẩn. Problem và test case phải được lưu atomically; `STUDENT` không được gọi endpoint này.
 - `/api/admin/problems/**` chỉ cho `ADMIN`: đọc dữ liệu quản trị gồm test case ẩn, sửa toàn bộ problem/test case atomically và xóa mềm problem. Xóa mềm phải loại bài khỏi catalog nhưng giữ submission/draft lịch sử và không để dữ liệu seed tái tạo bài sau khi restart. Test case ẩn không được trả qua API public.
 - Chi tiết bài tập có `sampleInput`/`sampleOutput` công khai cho chạy thử; đây là dữ liệu mẫu riêng, không lấy hoặc làm lộ test case ẩn.
-- `POST /api/problems/{slug}/runs` chỉ dành cho `STUDENT`, chạy toàn bộ test case ẩn nhưng không tạo submission hoặc tiến độ. Response chỉ trả vị trí, trạng thái đạt/trượt của từng case và kết quả tổng; không trả input hay expected output ẩn. Kết quả tổng chỉ là `ACCEPTED` khi mọi test case đều đạt.
+- `POST /api/problems/{slug}/runs` dành cho user đã xác thực với role `STUDENT`, `TEACHER` hoặc `ADMIN`, chạy toàn bộ test case ẩn nhưng không tạo submission hoặc tiến độ. Response chỉ trả vị trí, trạng thái đạt/trượt của từng case và kết quả tổng; không trả input hay expected output ẩn. Kết quả tổng chỉ là `ACCEPTED` khi mọi test case đều đạt.
+- Mỗi lượt chạy test được cộng vào `problem_run_statistics` bằng cập nhật nguyên tử; `successful_runs` chỉ tăng khi kết quả tổng là `ACCEPTED`. API danh sách trả `acceptanceRate = successful_runs / total_runs * 100`, truy vấn thống kê theo lô và không dùng submission để tính tỷ lệ này.
 - Submit lấy test case qua output port và gọi `CodeJudgeUseCase`; kết quả cuối cùng là `ACCEPTED`, `WRONG_ANSWER`, `COMPILE_ERROR`, `RUNTIME_ERROR` hoặc `TIME_LIMIT`.
 - Application phải kiểm tra language thuộc tập ngôn ngữ của problem trước khi lưu draft hoặc gọi Code Judge; frontend chỉ hiển thị các language được phép trong workspace.
-- Mọi submission hợp lệ được lưu. `GET /api/student/problem-progress` chỉ dành cho `STUDENT` và trả các problem ID đã có ít nhất một submission `ACCEPTED` của chính sinh viên đó.
-- Bản nháp code được lưu riêng theo cặp `student/problem`, gồm language, source code và input. `GET/PUT /api/student/problems/{slug}/draft` chỉ cho chính `STUDENT` đang đăng nhập; frontend autosave có debounce và phải lưu ngay lần nữa trước Submit.
+- Mọi submission hợp lệ được lưu. `GET /api/student/problem-progress` cho phép cả ba role và trả các problem ID đã có ít nhất một submission `ACCEPTED` của chính tài khoản đó.
+- Bản nháp code được lưu riêng theo cặp `user/problem`, gồm language, source code và input. `GET/PUT /api/student/problems/{slug}/draft` cho phép cả ba role nhưng chỉ đọc/ghi bản nháp của chính tài khoản đang đăng nhập; frontend autosave có debounce và phải lưu ngay lần nữa trước Submit.
 - `NOT_JUDGED` chỉ được giữ để tương thích dữ liệu cũ. Không lưu submission mới nếu hạ tầng judge không sẵn sàng.
 - Test case và expected output chỉ tồn tại ở backend; không trả qua API public.
 - Frontend code của module nằm trong `src/features/programming-problems`.
-- Trang `/problems` hiển thị các topic dạng bộ lọc tên ngắn ở trên, bộ lọc difficulty/language/tiến độ và danh sách bài một hàng ở dưới, phân trang cố định 10 bài mỗi trang; chọn bài mới mở workspace. Workspace ưu tiên bản nháp của sinh viên, nếu chưa có thì dùng starter code riêng của bài/ngôn ngữ. Tài khoản `TEACHER`/`ADMIN` mở trang riêng `/problems/add` để thêm bài tập, starter code và test case ẩn. Chỉ `ADMIN` thấy thao tác sửa/xóa; sửa dùng `/problems/{slug}/edit`, xóa cập nhật danh sách ngay không reload.
+- Trang `/problems` hiển thị các topic dạng bộ lọc tên ngắn ở trên, bộ lọc difficulty/language/tiến độ và danh sách bài một hàng ở dưới, phân trang cố định 20 bài mỗi trang; chọn bài mới mở workspace. Workspace ưu tiên bản nháp của sinh viên, nếu chưa có thì dùng starter code riêng của bài/ngôn ngữ. Tài khoản `TEACHER`/`ADMIN` mở trang riêng `/problems/add` để thêm bài tập, starter code và test case ẩn. Chỉ `ADMIN` thấy thao tác sửa/xóa; sửa dùng `/problems/{slug}/edit`, xóa cập nhật danh sách ngay không reload.
 - Slug bài tập dùng tiếng Việt không dấu, phân tách bằng dấu gạch ngang để URL ngắn và dễ đọc.
-- Danh sách trong từng chủ đề hiển thị mỗi bài trên một hàng đầy đủ; bài đã giải có dấu tích lấy từ tiến độ `ACCEPTED` đã lưu và đồng bộ lại ngay sau Submit. Chạy thử `SUCCESS` hiển thị trạng thái và dấu tích màu xanh nhưng không được tính là đã giải.
+- Topic hiển thị thành hàng lọc riêng phía trên thanh search/sort/filter. Danh sách hiển thị mỗi bài trên một hàng gọn cùng acceptance rate từ lượt chạy thử; bài đã giải có dấu tích lấy từ tiến độ `ACCEPTED` đã lưu và đồng bộ lại ngay sau Submit. Chạy thử `SUCCESS` hiển thị trạng thái và dấu tích màu xanh nhưng không được tính là đã giải.
 
 ### Course/Lesson
 
@@ -117,35 +120,26 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - `GET /api/teacher/courses` trả danh sách lớp được quản lý cùng số sinh viên và trạng thái; không trả lớp của giáo viên khác cho `TEACHER`.
 - Quản lý thành viên lớp đi qua `CourseLearningUseCase`: roster trả email/ngày tham gia, tìm ứng viên theo tên/email/mã sinh viên, thêm nhiều và xóa nhiều. Mọi endpoint thành viên phải kiểm tra giáo viên sở hữu lớp hoặc role `ADMIN`; không trả UUID nội bộ của sinh viên.
 - Giáo viên/admin chỉ được sửa `displayName` của enrollment trong phạm vi lớp; không được dùng chức năng lớp để sửa tên, email hoặc thông tin tài khoản toàn cục của sinh viên.
-- Danh sách môn học, chi tiết khóa học và lesson là public. Đánh dấu lesson hoàn thành chỉ chấp nhận JWT role `STUDENT`.
+- Danh sách môn học, chi tiết khóa học và lesson là public. Đánh dấu lesson hoàn thành chấp nhận JWT của `STUDENT`, `TEACHER` hoặc `ADMIN` và lưu tiến độ theo chính tài khoản thực hiện.
 - Tiến độ hoàn thành là idempotent theo cặp student/lesson; không tạo bản ghi trùng khi gọi lại.
 - Giáo viên thêm sinh viên vào khóa học của mình bằng một mã sinh viên hoặc file TXT UTF-8 chứa tối đa 1000 mã; import phải kiểm tra toàn bộ mã trước khi lưu và enrollment idempotent theo cặp course/student.
 - Giáo viên sở hữu lớp/admin có thể gán hoặc gỡ bài lập trình. Sinh viên chỉ đọc được lớp đã enrollment; tiến trình bằng số bài được gán đã có submission `ACCEPTED` chia tổng số bài được gán (lớp chưa có bài trả 0%).
 - Tài liệu lớp chỉ nhận PDF, Word (`.doc`, `.docx`) hoặc PowerPoint (`.ppt`, `.pptx`), tối đa 20 MB. Metadata đi qua persistence port; byte file đi qua `CourseFileStorage` và local named volume `devedu_course_materials`. Tên file client không được dùng làm đường dẫn storage.
-- Chỉ giáo viên sở hữu khóa học/admin được upload và xem danh sách lớp. Chỉ sinh viên đã được enrollment, giáo viên sở hữu hoặc admin được list/download tài liệu; response file phải có content type chuẩn, `nosniff` và Content-Disposition an toàn.
+- Chỉ giáo viên sở hữu khóa học/admin được upload và xem danh sách lớp. Tài khoản đã enrollment ở bất kỳ role nào, giáo viên sở hữu hoặc admin được list/download tài liệu; response file phải có content type chuẩn, `nosniff` và Content-Disposition an toàn.
 - Video vẫn chỉ là URL HTTP/HTTPS được lưu cùng lesson. Không tự ý thêm object storage, transcoding hoặc streaming infrastructure.
 - Frontend code của module nằm trong `src/features/course-learning`.
-- `/courses` là một trang “Lớp học” duy nhất. Giáo viên/admin quản lý tab Sinh viên và Bài tập; sinh viên chỉ thấy các lớp đã tham gia cùng tab Bài tập/Tiến trình và mở bài qua `/problems/{slug}`. Roster phân trang 10 người, dùng bảng desktop/card mobile, hỗ trợ tìm kiếm, chọn nhiều và confirmation trước khi xóa. Không khôi phục `TeacherCourseStudio` hoặc tạo route chi tiết lớp riêng.
+- `/courses` là một trang “Lớp học” duy nhất. Giáo viên/admin quản lý tab Sinh viên, Bài tập và Tiến trình; `GET /api/teacher/courses/{courseId}/student-progress` trả tiến trình theo submission `ACCEPTED` của từng sinh viên và phải truy vấn theo lô, không N+1. Sinh viên thấy các lớp đã tham gia; giáo viên/admin có thể chuyển giữa chế độ quản lý và học tập, trong đó giáo viên học trên lớp mình sở hữu hoặc đã tham gia còn admin có thể mở mọi lớp. Chế độ học có tab Bài tập/Tiến trình và mở bài qua `/problems/{slug}`. Roster phân trang 10 người, dùng bảng desktop/card mobile, hỗ trợ tìm kiếm, chọn nhiều và confirmation trước khi xóa. Không khôi phục `TeacherCourseStudio` hoặc tạo route chi tiết lớp riêng.
 
 ### Exam
 
 - Domain gồm `Exam`, `ExamQuestion`, `ExamAttempt`, `ExamAnswer` và các enum trạng thái/loại câu hỏi.
 - `ExamUseCase` điều phối tạo đề, bắt đầu lượt thi, lưu đáp án, nộp bài và đọc kết quả; persistence nằm trong `infrastructure/persistence/exam`.
 - `/api/teacher/exams/**` dành cho `TEACHER`/`ADMIN`; giáo viên chỉ quản lý và xem kết quả kỳ thi của mình, admin có thể quản lý tất cả.
-- `/api/exams/**` chỉ dành cho `STUDENT`. Mỗi sinh viên có tối đa một attempt cho mỗi kỳ thi.
+- `/api/exams/**` dành cho mọi tài khoản đã xác thực (`STUDENT`, `TEACHER`, `ADMIN`). Mỗi tài khoản có tối đa một attempt cho mỗi kỳ thi; quyền tham gia không làm thay đổi quyền quản lý riêng của giáo viên/admin.
 - Đề chỉ được bắt đầu từ `scheduledAt`; hạn làm bài của attempt được tính bằng `durationMinutes` kể từ lúc bắt đầu.
 - Không trả đáp án đúng qua API sinh viên. Không cho thay đổi bộ câu hỏi sau khi đã có attempt.
 - Multiple Choice được chấm tự động. Coding chỉ lưu source code và luôn được báo chờ chấm; không giả lập judge hoặc điểm coding.
 - Frontend code của module nằm trong `src/features/exam`.
-
-### Interview
-
-- Domain gồm `InterviewQuestion`, `InterviewTopic` và `InterviewDifficulty`.
-- `InterviewQuestionsUseCase` hỗ trợ list, filter đồng thời theo topic/difficulty và lấy chi tiết; persistence nằm trong `infrastructure/persistence/interview`.
-- `/api/interview/**` chỉ dành cho JWT role `STUDENT`.
-- API danh sách không trả `answer` hoặc `explanation`; hai trường này chỉ xuất hiện ở API chi tiết khi sinh viên mở đáp án.
-- Topic cố định gồm Java, Python, C++, OOP, SQL, Database, Data Structures, Algorithms và Web; difficulty gồm `EASY`, `MEDIUM`, `HARD`.
-- Frontend code của module nằm trong `src/features/interview`.
 
 ## Kiến trúc frontend
 
@@ -164,7 +158,7 @@ Không gom toàn bộ component, hook hoặc service của nhiều feature vào 
 
 Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím, autocomplete tĩnh/biến đã khai báo và syntax highlighting theo ngôn ngữ cho type, keyword, string, number, function và comment; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems có thao tác chạy input tùy chỉnh riêng; nút chạy test chấm toàn bộ test case ẩn và hiển thị đạt/trượt từng case. Input khi Submit luôn lấy từ test case ẩn của backend.
 
-Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/courses`, `/exams`, `/interview`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
+Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/courses`, `/exams`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
 
 Authentication frontend nằm trong `src/features/auth`, gồm `/login`, `/register` và `/auth/callback`. Header chỉ đọc trạng thái đăng nhập tối thiểu để hiển thị avatar, tên và menu logout; không hiển thị email trên navbar. Request và lưu/xóa token thuộc feature auth.
 

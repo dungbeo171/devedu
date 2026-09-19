@@ -10,8 +10,11 @@ import {
   IconSettings,
   IconTrophy,
 } from '../../../shared/components/Icons'
+import { getStoredUser } from '../../auth/api/authApi'
 
 export function ExamModule() {
+  const currentUser = getStoredUser()
+  const canManage = currentUser?.role === 'TEACHER' || currentUser?.role === 'ADMIN'
   const [exams, setExams] = useState<ExamSummary[]>([])
   const [session, setSession] = useState<ExamSession | null>(null)
   const [teacher, setTeacher] = useState(false)
@@ -28,9 +31,9 @@ export function ExamModule() {
         const code = e instanceof Error ? e.message : ''
         setMessage(
           code === 'AUTHENTICATION_REQUIRED'
-            ? 'Đăng nhập bằng tài khoản sinh viên để xem kỳ thi.'
+            ? 'Đăng nhập để xem kỳ thi.'
             : code === 'ROLE_REQUIRED'
-            ? 'Danh sách này chỉ dành cho sinh viên.'
+            ? 'Tài khoản hiện tại không có quyền xem kỳ thi.'
             : code
         )
       })
@@ -62,14 +65,16 @@ export function ExamModule() {
             Multiple Choice được chấm tự động ngay sau khi nộp; Coding được lưu lại cho ban giám khảo chấm.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setTeacher(true)}
-          className="ui-button-secondary"
-        >
-          <IconSettings className="h-3.5 w-3.5 text-blue-600" />
-          <span>Quản lý kỳ thi</span>
-        </button>
+        {canManage ? (
+          <button
+            type="button"
+            onClick={() => setTeacher(true)}
+            className="ui-button-secondary"
+          >
+            <IconSettings className="h-3.5 w-3.5 text-blue-600" />
+            <span>Quản lý kỳ thi</span>
+          </button>
+        ) : null}
       </div>
 
       {message ? (

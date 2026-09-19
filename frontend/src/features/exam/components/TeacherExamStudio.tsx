@@ -1,7 +1,14 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { addExamQuestion, createExam, getExamResults, getManagedExams } from '../api/examApi'
 import type { CodeLanguage, ExamQuestionType, ExamSummary, TeacherExamResult } from '../types/exam'
-import { IconArrowLeft, IconSave } from '../../../shared/components/Icons'
+import { IconArrowLeft, IconCheck, IconChevronDown, IconSave, IconSearch } from '../../../shared/components/Icons'
+import { getProgrammingProblem, getProgrammingProblems } from '../../programming-problems/api/programmingProblemsApi'
+import type {
+  ProgrammingProblemDetail,
+  ProgrammingProblemSummary,
+} from '../../programming-problems/types/programmingProblem'
+
+const answerLabels = ['A', 'B', 'C', 'D'] as const
 
 export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
   const [exams, setExams] = useState<ExamSummary[]>([])
@@ -16,6 +23,25 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
   })
   const [message, setMessage] = useState('')
   const [results, setResults] = useState<TeacherExamResult[]>([])
+  const [optionCount, setOptionCount] = useState(4)
+  const [choiceOptions, setChoiceOptions] = useState(['', '', '', ''])
+  const [correctOptionIndex, setCorrectOptionIndex] = useState(0)
+  const [problemCatalog, setProblemCatalog] = useState<ProgrammingProblemSummary[]>([])
+  const [problemCatalogLoaded, setProblemCatalogLoaded] = useState(false)
+  const [problemCatalogLoading, setProblemCatalogLoading] = useState(false)
+  const [problemCatalogError, setProblemCatalogError] = useState('')
+  const [problemSearch, setProblemSearch] = useState('')
+  const [selectedProblemSlug, setSelectedProblemSlug] = useState('')
+  const [selectedProblem, setSelectedProblem] = useState<ProgrammingProblemDetail | null>(null)
+  const [selectedProblemLoading, setSelectedProblemLoading] = useState(false)
+
+  const visibleProblems = useMemo(() => {
+    const query = problemSearch.trim().toLocaleLowerCase('vi')
+    if (!query) return problemCatalog
+    return problemCatalog.filter((problem) =>
+      `${problem.title} ${problem.slug} ${problem.summary}`.toLocaleLowerCase('vi').includes(query),
+    )
+  }, [problemCatalog, problemSearch])
 
   const update = (key: string, value: string) =>
     setValues((current) => ({ ...current, [key]: value }))
@@ -31,6 +57,59 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
       )
 
   useEffect(load, [])
+
+  useEffect(() => {
+    if (mode !== 'question' || values.type !== 'CODING' || problemCatalogLoaded) return
+    let cancelled = false
+    setProblemCatalogLoading(true)
+    setProblemCatalogError('')
+    void getProgrammingProblems()
+      .then((items) => {
+        if (cancelled) return
+        setProblemCatalog(items)
+        setProblemCatalogLoaded(true)
+        setSelectedProblemSlug((current) => current || items[0]?.slug || '')
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setProblemCatalogError(error instanceof Error ? error.message : 'Không thể tải kho bài tập.')
+      })
+      .finally(() => {
+        if (!cancelled) setProblemCatalogLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [mode, problemCatalogLoaded, values.type])
+
+  useEffect(() => {
+    if (mode !== 'question' || values.type !== 'CODING' || !selectedProblemSlug) {
+      setSelectedProblem(null)
+      return
+    }
+    let cancelled = false
+    setSelectedProblem(null)
+    setSelectedProblemLoading(true)
+    setProblemCatalogError('')
+    void getProgrammingProblem(selectedProblemSlug)
+      .then((problem) => {
+        if (cancelled) return
+        setSelectedProblem(problem)
+        setValues((current) => ({
+          ...current,
+          language: problem.allowedLanguages.includes(current.language as CodeLanguage)
+            ? current.language
+            : problem.allowedLanguages[0] ?? '',
+        }))
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setSelectedProblem(null)
+        setProblemCatalogError(error instanceof Error ? error.message : 'Không thể tải bài tập.')
+      })
+      .finally(() => {
+        if (!cancelled) setSelectedProblemLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [mode, selectedProblemSlug, values.type])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -49,21 +128,36 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
         load()
       } else if (mode === 'question') {
         const type = values.type as ExamQuestionType
-        const options =
-          type === 'MULTIPLE_CHOICE'
-            ? (values.options ?? '').split('\n').map((v) => v.trim()).filter(Boolean)
-            : []
+        const options = type === 'MULTIPLE_CHOICE'
+          ? choiceOptions.slice(0, optionCount).map((option) => option.trim())
+          : []
+        if (type === 'MULTIPLE_CHOICE' && options.some((option) => !option)) {
+          throw new Error('Vui lòng nhập đầy đủ nội dung cho tất cả đáp án.')
+        }
+        if (type === 'CODING' && !selectedProblem) {
+          throw new Error('Vui lòng chọn một bài lập trình có sẵn.')
+        }
+        const prompt = type === 'CODING'
+          ? createCodingQuestionPrompt(selectedProblem as ProgrammingProblemDetail)
+          : values.prompt ?? ''
         await addExamQuestion(examId, {
           type,
-          prompt: values.prompt ?? '',
+          prompt,
           options,
           correctOptionIndex:
-            type === 'MULTIPLE_CHOICE' ? Number(values.correct) - 1 : undefined,
+            type === 'MULTIPLE_CHOICE' ? correctOptionIndex : undefined,
           codingLanguage:
             type === 'CODING' ? (values.language as CodeLanguage) : undefined,
           points: Number(values.points),
           position: Number(values.position),
         })
+        setValues((current) => ({
+          ...current,
+          prompt: '',
+          position: String(Number(current.position || 0) + 1),
+        }))
+        setChoiceOptions(['', '', '', ''])
+        setCorrectOptionIndex(0)
         setMessage('Đã thêm câu hỏi vào kỳ thi.')
       } else {
         setResults(await getExamResults(examId))
@@ -82,7 +176,7 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
           className="ui-button-ghost px-0 hover:bg-transparent hover:text-blue-700"
         >
           <IconArrowLeft className="h-3.5 w-3.5" />
-          <span>Giao diện sinh viên</span>
+          <span>Danh sách kỳ thi</span>
         </button>
         <div className="flex gap-2">
           {(['create', 'question', 'results'] as const).map((item) => (
@@ -172,37 +266,118 @@ export function TeacherExamStudio({ onBack }: { onBack: () => void }) {
                 value={values.position}
                 onChange={(v) => update('position', v)}
               />
-              <Area
-                label="Nội dung câu hỏi"
-                value={values.prompt}
-                onChange={(v) => update('prompt', v)}
-                placeholder="Nội dung đề bài..."
-              />
               {values.type === 'MULTIPLE_CHOICE' ? (
                 <>
                   <Area
-                    label="Các lựa chọn (mỗi dòng một đáp án)"
-                    value={values.options}
-                    onChange={(v) => update('options', v)}
-                    placeholder="Lựa chọn A&#10;Lựa chọn B&#10;Lựa chọn C&#10;Lựa chọn D"
+                    label="Nội dung câu hỏi"
+                    value={values.prompt}
+                    onChange={(v) => update('prompt', v)}
+                    placeholder="Nhập nội dung câu hỏi trắc nghiệm..."
                   />
-                  <Field
-                    label="Số thứ tự đáp án đúng (1, 2, 3, ...)"
-                    type="number"
-                    value={values.correct}
-                    onChange={(v) => update('correct', v)}
+                  <Select
+                    label="Số lượng đáp án"
+                    value={String(optionCount)}
+                    onChange={(value) => {
+                      const count = Number(value)
+                      setOptionCount(count)
+                      setCorrectOptionIndex((current) => Math.min(current, count - 1))
+                    }}
+                    options={[2, 3, 4].map((count) => ({
+                      value: String(count),
+                      label: `${count} đáp án`,
+                    }))}
                   />
+                  <Select
+                    label="Đáp án đúng"
+                    value={String(correctOptionIndex)}
+                    onChange={(value) => setCorrectOptionIndex(Number(value))}
+                    options={answerLabels.slice(0, optionCount).map((label, index) => ({
+                      value: String(index),
+                      label: choiceOptions[index].trim()
+                        ? `${label} — ${choiceOptions[index]}`
+                        : `Đáp án ${label}`,
+                    }))}
+                  />
+                  <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+                    {answerLabels.slice(0, optionCount).map((label, index) => (
+                      <label key={label} className="block text-sm font-semibold text-slate-700">
+                        Đáp án {label}
+                        <input
+                          required
+                          maxLength={1000}
+                          value={choiceOptions[index]}
+                          onChange={(event) => setChoiceOptions((current) =>
+                            current.map((option, optionIndex) => optionIndex === index ? event.target.value : option))}
+                          placeholder={`Nhập nội dung đáp án ${label}`}
+                          className="ui-control mt-2"
+                        />
+                      </label>
+                    ))}
+                  </div>
                 </>
               ) : (
-                <Select
-                  label="Ngôn ngữ yêu cầu"
-                  value={values.language}
-                  onChange={(v) => update('language', v)}
-                  options={['CPP', 'JAVA', 'PYTHON', 'HTML', 'MYSQL'].map((v) => ({
-                    value: v,
-                    label: v,
-                  }))}
-                />
+                <>
+                  <SearchableProblemSelect
+                    label="Bài tập có sẵn"
+                    value={selectedProblemSlug}
+                    selectedLabel={problemCatalog.find((problem) => problem.slug === selectedProblemSlug)?.title ?? ''}
+                    search={problemSearch}
+                    onSearchChange={setProblemSearch}
+                    onChange={setSelectedProblemSlug}
+                    disabled={problemCatalogLoading || problemCatalog.length === 0}
+                    options={visibleProblems.map((problem) => ({
+                      value: problem.slug,
+                      label: problem.title,
+                      meta: difficultyLabel(problem.difficulty),
+                    }))}
+                  />
+
+                  {problemCatalogLoading || selectedProblemLoading ? (
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                      Đang tải kho bài tập...
+                    </div>
+                  ) : problemCatalogError ? (
+                    <div role="alert" className="sm:col-span-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">
+                      {problemCatalogError}
+                    </div>
+                  ) : problemCatalogLoaded && problemCatalog.length === 0 ? (
+                    <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                      Chưa có bài lập trình trong hệ thống.
+                    </div>
+                  ) : null}
+
+                  {selectedProblem ? (
+                    <>
+                      <Select
+                        label="Ngôn ngữ làm bài"
+                        value={values.language}
+                        onChange={(v) => update('language', v)}
+                        options={selectedProblem.allowedLanguages.map((language) => ({
+                          value: language,
+                          label: languageLabel(language),
+                        }))}
+                      />
+                      <div className="sm:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-5">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Bài được chọn</p>
+                            <h3 className="mt-1 text-lg font-bold text-slate-950">{selectedProblem.title}</h3>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">{selectedProblem.description}</p>
+                          </div>
+                          <span className="rounded-lg border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+                            {difficultyLabel(selectedProblem.difficulty)}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                          <QuestionPreview label="Yêu cầu Input" value={selectedProblem.inputDescription} />
+                          <QuestionPreview label="Yêu cầu Output" value={selectedProblem.outputDescription} />
+                          <QuestionPreview label="Input mẫu" value={selectedProblem.sampleInput || 'Không có'} code />
+                          <QuestionPreview label="Output mẫu" value={selectedProblem.sampleOutput || 'Không có'} code />
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </>
               )}
               <Field
                 label="Điểm số"
@@ -348,20 +523,23 @@ function Select({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
+  disabled?: boolean
 }) {
   return (
     <label className="block text-sm font-semibold text-slate-700">
       {label}
       <select
         required
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="ui-control mt-2 font-semibold"
+        className="ui-control mt-2 font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value} className="bg-white text-slate-900">
@@ -371,4 +549,117 @@ function Select({
       </select>
     </label>
   )
+}
+
+function SearchableProblemSelect({
+  label,
+  value,
+  selectedLabel,
+  search,
+  onSearchChange,
+  onChange,
+  options,
+  disabled,
+}: {
+  label: string
+  value: string
+  selectedLabel: string
+  search: string
+  onSearchChange: (value: string) => void
+  onChange: (value: string) => void
+  options: { value: string; label: string; meta: string }[]
+  disabled: boolean
+}) {
+  return (
+    <div className="relative z-20 sm:col-span-2">
+      <p className="text-sm font-semibold text-slate-700">{label}</p>
+      <details className="group relative mt-2">
+        <summary
+          aria-disabled={disabled}
+          onClick={(event) => { if (disabled) event.preventDefault() }}
+          className={`ui-control flex list-none items-center justify-between gap-3 font-semibold [&::-webkit-details-marker]:hidden ${
+            disabled ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'cursor-pointer hover:border-blue-300 group-open:border-blue-400 group-open:ring-2 group-open:ring-blue-100'
+          }`}
+        >
+          <span className="min-w-0 truncate">{selectedLabel || (disabled ? 'Đang tải danh sách bài tập...' : 'Chọn bài tập')}</span>
+          <IconChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="absolute inset-x-0 top-[calc(100%+.4rem)] z-50 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_-18px_rgba(15,23,42,.35)]">
+          <label className="relative block">
+            <span className="sr-only">Tìm bài lập trình</span>
+            <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Tìm theo tên hoặc slug..."
+              className="ui-control ui-control-with-leading-icon pr-3 text-sm font-medium"
+            />
+          </label>
+          <div className="mt-2 max-h-64 overflow-y-auto">
+            {options.length > 0 ? options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={(event) => {
+                  onChange(option.value)
+                  event.currentTarget.closest('details')?.removeAttribute('open')
+                }}
+                className={`flex min-h-10 w-full cursor-pointer items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${
+                  option.value === value ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span className="min-w-0 truncate text-sm font-semibold">{option.label}</span>
+                <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+                  {option.meta}
+                  {option.value === value ? <IconCheck className="h-4 w-4 text-blue-600" /> : null}
+                </span>
+              </button>
+            )) : (
+              <p className="px-3 py-5 text-center text-sm font-medium text-slate-500">Không tìm thấy bài tập phù hợp.</p>
+            )}
+          </div>
+        </div>
+      </details>
+    </div>
+  )
+}
+
+function QuestionPreview({ label, value, code = false }: { label: string; value: string; code?: boolean }) {
+  return (
+    <div className="rounded-xl border border-blue-100 bg-white p-3.5">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`mt-1.5 whitespace-pre-wrap text-sm leading-6 text-slate-700 ${code ? 'font-mono' : ''}`}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function createCodingQuestionPrompt(problem: ProgrammingProblemDetail): string {
+  const sections = [
+    problem.title,
+    problem.description,
+    `Yêu cầu Input:\n${problem.inputDescription}`,
+    `Yêu cầu Output:\n${problem.outputDescription}`,
+  ]
+  if (problem.sampleInput || problem.sampleOutput) {
+    sections.push(
+      `Input mẫu:\n${problem.sampleInput || '(trống)'}`,
+      `Output mẫu:\n${problem.sampleOutput || '(trống)'}`,
+    )
+  }
+  return sections.join('\n\n')
+}
+
+function difficultyLabel(difficulty: ProgrammingProblemSummary['difficulty']): string {
+  if (difficulty === 'EASY') return 'Dễ'
+  if (difficulty === 'MEDIUM') return 'Trung bình'
+  return 'Khó'
+}
+
+function languageLabel(language: CodeLanguage): string {
+  if (language === 'CPP') return 'C++'
+  if (language === 'MYSQL') return 'MySQL'
+  return language[0] + language.slice(1).toLowerCase()
 }

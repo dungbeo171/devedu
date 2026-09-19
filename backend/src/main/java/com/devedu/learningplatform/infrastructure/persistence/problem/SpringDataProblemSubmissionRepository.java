@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 interface SpringDataProblemSubmissionRepository
@@ -17,4 +18,17 @@ interface SpringDataProblemSubmissionRepository
               and submission.status = com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED
             """)
     List<UUID> findAcceptedProblemIdsByStudentId(@Param("studentId") UUID studentId);
+
+    interface AcceptedProblemPair {
+        UUID getStudentId();
+        UUID getProblemId();
+    }
+
+    @Query("""
+            select distinct submission.studentId as studentId, submission.problemId as problemId
+            from ProblemSubmissionJpaEntity submission
+            where submission.studentId in :studentIds
+              and submission.status = com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED
+            """)
+    List<AcceptedProblemPair> findAcceptedProblemIdsByStudentIds(@Param("studentIds") Set<UUID> studentIds);
 }

@@ -13,6 +13,8 @@ public record CreateProgrammingProblemRequest(
         String title,
         String summary,
         String description,
+        String inputDescription,
+        String outputDescription,
         String sampleInput,
         String sampleOutput,
         ProblemTopic topic,

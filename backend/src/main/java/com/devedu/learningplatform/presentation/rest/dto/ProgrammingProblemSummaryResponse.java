@@ -14,6 +14,7 @@ public record ProgrammingProblemSummaryResponse(
         String summary,
         ProblemTopic topic,
         ProblemDifficulty difficulty,
-        Set<CodeLanguage> allowedLanguages
+        Set<CodeLanguage> allowedLanguages,
+        double acceptanceRate
 ) {
 }

@@ -31,6 +31,12 @@ class ProgrammingProblemJpaEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "input_description", nullable = false, columnDefinition = "TEXT")
+    private String inputDescription;
+
+    @Column(name = "output_description", nullable = false, columnDefinition = "TEXT")
+    private String outputDescription;
+
     @Column(name = "sample_input", nullable = false, columnDefinition = "TEXT")
     private String sampleInput;
 
@@ -61,6 +67,7 @@ class ProgrammingProblemJpaEntity {
     }
 
     ProgrammingProblemJpaEntity(UUID id, String slug, String title, String summary, String description,
+                                String inputDescription, String outputDescription,
                                 String sampleInput, String sampleOutput, ProblemTopic topic,
                                 ProblemDifficulty difficulty, String allowedLanguages, String starterCodes,
                                 Instant createdAt, boolean deleted) {
@@ -69,6 +76,8 @@ class ProgrammingProblemJpaEntity {
         this.title = title;
         this.summary = summary;
         this.description = description;
+        this.inputDescription = inputDescription;
+        this.outputDescription = outputDescription;
         this.sampleInput = sampleInput;
         this.sampleOutput = sampleOutput;
         this.topic = topic;
@@ -97,6 +106,14 @@ class ProgrammingProblemJpaEntity {
 
     String getDescription() {
         return description;
+    }
+
+    String getInputDescription() {
+        return inputDescription;
+    }
+
+    String getOutputDescription() {
+        return outputDescription;
     }
 
     String getSampleInput() {

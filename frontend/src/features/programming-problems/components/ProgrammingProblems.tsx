@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { deleteProgrammingProblem, getProgrammingProblems, getSolvedProgrammingProblemIds } from '../api/programmingProblemsApi'
 import { ProblemWorkspace } from './ProblemWorkspace'
 import { getStoredUser } from '../../auth/api/authApi'
@@ -9,7 +9,7 @@ import {
   type ProgrammingProblemSummary,
   type SubmissionLanguage,
 } from '../types/programmingProblem'
-import { IconCheck, IconChevronDown, IconCode } from '../../../shared/components/Icons'
+import { IconCheck, IconChevronDown, IconCode, IconFilter, IconSearch, IconSort } from '../../../shared/components/Icons'
 
 const topics = Object.entries(topicLabels) as [ProblemTopic, string][]
 const difficultyLabels: Record<ProblemDifficulty, string> = {
@@ -21,7 +21,8 @@ const languageLabels: Record<SubmissionLanguage, string> = {
   CPP: 'C++', JAVA: 'Java', PYTHON: 'Python', HTML: 'HTML', MYSQL: 'MySQL',
 }
 type ProgressFilter = '' | 'SOLVED' | 'UNSOLVED'
-const problemsPerPage = 10
+type SortDirection = 'DEFAULT' | 'ASC' | 'DESC'
+const problemsPerPage = 20
 
 interface ProgrammingProblemsProps {
   slug?: string
@@ -32,6 +33,8 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   const [difficulty, setDifficulty] = useState<ProblemDifficulty | ''>('')
   const [language, setLanguage] = useState<SubmissionLanguage | ''>('')
   const [progress, setProgress] = useState<ProgressFilter>('')
+  const [search, setSearch] = useState('')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('DEFAULT')
   const [problems, setProblems] = useState<ProgrammingProblemSummary[]>([])
   const [solvedProblemIds, setSolvedProblemIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -75,7 +78,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   }, [selectedTopic, difficulty, language])
 
   useEffect(() => {
-    if (currentUser?.role !== 'STUDENT') {
+    if (!currentUser) {
       setSolvedProblemIds(new Set())
       return
     }
@@ -92,7 +95,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
 
   useEffect(() => {
     setPage(1)
-  }, [selectedTopic, difficulty, language, progress])
+  }, [selectedTopic, difficulty, language, progress, search, sortDirection])
 
   if (slug) return (
     <ProblemWorkspace
@@ -106,18 +109,27 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
     />
   )
 
-  const visibleProblems = problems.filter((problem) => {
-    if (progress === 'SOLVED') return solvedProblemIds.has(problem.id)
-    if (progress === 'UNSOLVED') return !solvedProblemIds.has(problem.id)
-    return true
-  })
+  const keyword = search.trim().toLocaleLowerCase('vi')
+  const visibleProblems = problems
+    .filter((problem) => {
+      if (progress === 'SOLVED' && !solvedProblemIds.has(problem.id)) return false
+      if (progress === 'UNSOLVED' && solvedProblemIds.has(problem.id)) return false
+      if (!keyword) return true
+      return `${problem.title} ${problem.summary} ${topicLabels[problem.topic]}`.toLocaleLowerCase('vi').includes(keyword)
+    })
+    .sort((left, right) => {
+      if (sortDirection === 'DEFAULT') return 0
+      const comparison = left.title.localeCompare(right.title, 'vi')
+      return sortDirection === 'ASC' ? comparison : -comparison
+    })
+  const activeFilterCount = Number(Boolean(search.trim())) + Number(Boolean(difficulty)) + Number(Boolean(language)) + Number(Boolean(progress))
   const totalPages = Math.max(1, Math.ceil(visibleProblems.length / problemsPerPage))
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * problemsPerPage
   const pageProblems = visibleProblems.slice(pageStart, pageStart + problemsPerPage)
 
   return (
-    <section className="mx-auto w-full max-w-5xl">
+    <section className="mx-auto w-full">
       {/* Toast Notification */}
       {flashMessage ? (
         <div role="status" className="flash-toast fixed right-4 top-20 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-xl border border-blue-700 bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-900/20 sm:right-6 lg:right-10">
@@ -152,44 +164,61 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
         </a>
       ) : null}
 
-      <div className="ui-panel relative z-20 mt-6 p-4">
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => setSelectedTopic(null)} className={filterButtonClass(selectedTopic === null)}>Tất cả</button>
-          {topics.map(([topic, label]) => (
-            <button key={topic} type="button" onClick={() => setSelectedTopic(topic)} className={filterButtonClass(selectedTopic === topic)}>{label}</button>
-          ))}
-        </div>
-        <div className="mt-3.5 flex flex-col gap-2.5 border-t border-blue-100 pt-3.5 sm:flex-row sm:flex-wrap sm:items-start sm:justify-end">
-          <ProblemFilterDropdown
-            label="Độ khó"
-            value={difficulty}
-            options={[
-              { value: '', label: 'Tất cả độ khó' },
-              ...Object.entries(difficultyLabels).map(([value, label]) => ({ value, label })),
-            ]}
-            onChange={(value) => setDifficulty(value as ProblemDifficulty | '')}
-          />
-          <ProblemFilterDropdown
-            label="Ngôn ngữ"
-            value={language}
-            options={[
-              { value: '', label: 'Tất cả ngôn ngữ' },
-              ...Object.entries(languageLabels).map(([value, label]) => ({ value, label })),
-            ]}
-            onChange={(value) => setLanguage(value as SubmissionLanguage | '')}
-          />
-          {currentUser?.role === 'STUDENT' ? (
-            <ProblemFilterDropdown
-              label="Tiến độ"
-              value={progress}
-              options={[
-                { value: '', label: 'Tất cả bài tập' },
-                { value: 'SOLVED', label: 'Đã giải' },
-                { value: 'UNSOLVED', label: 'Chưa giải' },
-              ]}
-              onChange={(value) => setProgress(value as ProgressFilter)}
-            />
-          ) : null}
+      <div className="mt-5 flex gap-1.5 overflow-x-auto pb-1">
+        <button type="button" onClick={() => setSelectedTopic(null)} className={`${filterButtonClass(selectedTopic === null)} shrink-0`}>Tất cả</button>
+        {topics.map(([topic, label]) => (
+          <button key={topic} type="button" onClick={() => setSelectedTopic(topic)} className={`${filterButtonClass(selectedTopic === topic)} shrink-0`}>{label}</button>
+        ))}
+      </div>
+
+      <div className="relative z-40 mt-3 flex flex-wrap items-center gap-2 overflow-visible">
+        <button
+          type="button"
+          onClick={() => setSortDirection((current) => current === 'DEFAULT' ? 'ASC' : current === 'ASC' ? 'DESC' : 'DEFAULT')}
+          className={`grid h-9 w-9 place-items-center rounded-full transition ${sortDirection === 'DEFAULT' ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' : 'bg-blue-50 text-blue-600 ring-1 ring-blue-200'}`}
+          aria-label={sortDirection === 'ASC' ? 'Đang sắp xếp A đến Z' : sortDirection === 'DESC' ? 'Đang sắp xếp Z đến A' : 'Sắp xếp bài tập'}
+          title={sortDirection === 'ASC' ? 'A–Z' : sortDirection === 'DESC' ? 'Z–A' : 'Sắp xếp'}
+        >
+          <IconSort className={`h-4 w-4 transition-transform ${sortDirection === 'DESC' ? 'rotate-180' : ''}`} />
+        </button>
+        <details className="group relative open:z-[90]" name="problem-filter-panel">
+          <summary className={`relative grid h-9 w-9 list-none place-items-center rounded-full transition [&::-webkit-details-marker]:hidden ${activeFilterCount ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`} aria-label="Mở bộ lọc">
+            <IconFilter className="h-4 w-4" />
+            {activeFilterCount ? <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">{activeFilterCount}</span> : null}
+          </summary>
+          <div className="absolute left-[-2.75rem] top-[calc(100%+.5rem)] z-[100] max-h-[min(26rem,calc(100vh-8rem))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-[0_18px_45px_-18px_rgba(15,23,42,.35)] sm:left-0">
+            <label className="block text-xs font-semibold text-slate-600">
+              Tìm kiếm bài tập
+              <span className="relative mt-1.5 block">
+                <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Nhập tên bài tập..."
+                  className="ui-control ui-control-with-leading-icon pr-3 text-sm font-medium"
+                />
+              </span>
+            </label>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <ProblemFilterSelect label="Độ khó" value={difficulty} options={[{ value: '', label: 'Tất cả độ khó' }, ...Object.entries(difficultyLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => setDifficulty(value as ProblemDifficulty | '')} />
+              <ProblemFilterSelect label="Ngôn ngữ" value={language} options={[{ value: '', label: 'Tất cả ngôn ngữ' }, ...Object.entries(languageLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => setLanguage(value as SubmissionLanguage | '')} />
+              {currentUser ? <ProblemFilterSelect label="Tiến độ" value={progress} options={[{ value: '', label: 'Tất cả bài tập' }, { value: 'SOLVED', label: 'Đã giải' }, { value: 'UNSOLVED', label: 'Chưa giải' }]} onChange={(value) => setProgress(value as ProgressFilter)} /> : null}
+            </div>
+            {activeFilterCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => { setSearch(''); setDifficulty(''); setLanguage(''); setProgress('') }}
+                className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-800 hover:underline"
+              >
+                Xóa bộ lọc
+              </button>
+            ) : null}
+          </div>
+        </details>
+        <div className="ml-auto flex items-center gap-2 pl-2 text-xs text-slate-500">
+          {currentUser ? <span className="h-4 w-4 rounded-full border-2 border-slate-200 border-t-emerald-500" aria-hidden="true" /> : null}
+          <span>{currentUser ? `${solvedProblemIds.size}/${problems.length} đã giải` : `${visibleProblems.length} bài tập`}</span>
         </div>
       </div>
 
@@ -197,7 +226,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       {!error && loading ? (
         <div className="mt-5 space-y-3">
           {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="ui-skeleton h-24 rounded-xl border border-slate-200" />
+            <div key={index} className="ui-skeleton h-20 rounded-md border border-slate-200" />
           ))}
         </div>
       ) : null}
@@ -225,44 +254,33 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   )
 }
 
-function ProblemFilterDropdown({ label, value, options, onChange }: {
+function ProblemFilterSelect({ label, value, options, onChange }: {
   label: string
   value: string
   options: { value: string; label: string }[]
   onChange: (value: string) => void
 }) {
-  const selectedLabel = options.find((option) => option.value === value)?.label ?? options[0].label
-
-  function selectOption(event: MouseEvent<HTMLButtonElement>, nextValue: string) {
-    onChange(nextValue)
-    event.currentTarget.closest('details')?.removeAttribute('open')
-  }
-
   return (
-    <details className="problem-filter-dropdown" name="problem-filters">
-      <summary className="problem-filter-trigger">
-        <span className="problem-filter-label">{label}</span>
-        <span className="problem-filter-value">{selectedLabel}</span>
-        <span className="problem-filter-chevron" aria-hidden="true">
-          <IconChevronDown className="h-3 w-3" />
-        </span>
-      </summary>
-      <div className="problem-filter-menu" role="listbox" aria-label={label}>
+    <label className="block min-w-0 text-xs font-semibold text-slate-600">
+      {label}
+      <span className="relative mt-1.5 block">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="ui-control appearance-none pr-9 text-sm font-semibold"
+        >
         {options.map((option) => (
-          <button
+          <option
             key={option.value}
-            type="button"
-            role="option"
-            aria-selected={option.value === value}
-            className="problem-filter-option"
-            onClick={(event) => selectOption(event, option.value)}
+            value={option.value}
           >
-            <span>{option.label}</span>
-            {option.value === value ? <span className="font-bold text-blue-600" aria-hidden="true">✓</span> : null}
-          </button>
+            {option.label}
+          </option>
         ))}
-      </div>
-    </details>
+        </select>
+        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-blue-700" />
+      </span>
+    </label>
   )
 }
 
@@ -289,56 +307,47 @@ function ProblemList({ problems, solvedProblemIds, onSelect, onDelete, startInde
   admin: boolean
 }) {
   return (
-    <div className="mt-5 space-y-3">
+    <div className="mt-4 overflow-hidden rounded-lg border border-slate-100">
       {problems.map((problem, index) => {
         const solved = solvedProblemIds.has(problem.id)
         return (
           <div
             key={problem.id}
-            className="group ui-card ui-card-interactive flex w-full items-stretch overflow-hidden"
+            className="group flex w-full items-stretch overflow-hidden border-b border-white bg-slate-50/70 transition-colors odd:bg-white last:border-b-0 hover:bg-blue-50/40"
           >
             <button
               type="button"
               onClick={() => onSelect(problem.slug)}
-              className="flex min-w-0 flex-1 cursor-pointer items-start gap-4 p-4 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/30 sm:p-5"
+              className="grid min-h-14 min-w-0 flex-1 cursor-pointer grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/20 sm:grid-cols-[28px_minmax(0,1fr)_110px_76px_120px] sm:px-4"
             >
               <span
-                className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-xs font-black transition-all ${
+                className={`grid h-7 w-7 shrink-0 place-items-center text-sm font-semibold transition-colors ${
                   solved
-                    ? 'border-emerald-500/50 bg-emerald-500 text-white shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400/20'
-                    : 'border-blue-100 bg-blue-50 text-transparent group-hover:border-blue-300 group-hover:text-blue-600'
+                    ? 'text-emerald-600'
+                    : 'text-transparent group-hover:text-slate-300'
                 }`}
                 aria-label={solved ? 'Đã hoàn thành' : 'Chưa hoàn thành'}
               >
                 <IconCheck className="h-4 w-4" />
               </span>
 
-              <span className="min-w-0 flex-1">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-blue-600">
-                    {topicLabels[problem.topic]}
-                  </span>
-                  <span className={`rounded-lg px-2.5 py-0.5 text-[10px] font-bold ${difficultyClass(problem.difficulty)}`}>
-                    {difficultyLabels[problem.difficulty]}
-                  </span>
-                  {problem.allowedLanguages.map((item) => (
-                    <span key={item} className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
-                      {languageLabels[item]}
-                    </span>
-                  ))}
-                </span>
-                <span className="mt-2.5 block text-base font-bold text-slate-950 transition-colors group-hover:text-blue-700">{problem.title}</span>
-                <span className="mt-1 block text-sm leading-6 text-slate-600 line-clamp-2">{problem.summary}</span>
+              <span className="min-w-0 truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-blue-700">
+                <span className="mr-2 text-slate-400">{startIndex + index + 1}.</span>{problem.title}
               </span>
-
-              <span className="shrink-0 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1 font-mono text-xs font-bold text-blue-600 group-hover:border-blue-300 group-hover:text-blue-700">
-                #{String(startIndex + index + 1).padStart(2, '0')}
+              <span className="hidden text-right text-xs text-slate-500 sm:block">
+                {problem.acceptanceRate.toFixed(1)}%
+              </span>
+              <span className={`justify-self-end text-xs font-medium ${difficultyTextClass(problem.difficulty)}`}>
+                {difficultyLabels[problem.difficulty]}
+              </span>
+              <span className="hidden truncate text-right font-mono text-[11px] text-slate-500 sm:block">
+                {problem.allowedLanguages.map((item) => languageLabels[item]).join(', ')}
               </span>
             </button>
             {admin ? (
-              <div className="flex shrink-0 flex-col justify-center gap-2 border-l border-slate-200 bg-slate-50/70 px-3">
-                <a href={`/problems/${encodeURIComponent(problem.slug)}/edit`} className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-center text-[11px] font-bold text-white transition hover:bg-blue-700">Sửa</a>
-                <button type="button" onClick={() => onDelete(problem)} className="cursor-pointer rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] font-bold text-red-600 transition hover:bg-red-50">Xóa</button>
+              <div className="flex shrink-0 flex-col justify-center gap-1.5 border-l border-slate-200 bg-slate-50/50 px-3">
+                <a href={`/problems/${encodeURIComponent(problem.slug)}/edit`} className="cursor-pointer rounded-md bg-blue-600 px-3 py-1.5 text-center text-[11px] font-semibold text-white transition hover:bg-blue-700">Sửa</a>
+                <button type="button" onClick={() => onDelete(problem)} className="cursor-pointer rounded-md border border-red-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-red-600 transition hover:bg-red-50">Xóa</button>
               </div>
             ) : null}
           </div>
@@ -359,7 +368,7 @@ function Pagination({ page, totalPages, onChange }: {
         type="button"
         disabled={page === 1}
         onClick={() => onChange(page - 1)}
-        className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         Trước
       </button>
@@ -369,7 +378,7 @@ function Pagination({ page, totalPages, onChange }: {
           type="button"
           aria-current={pageNumber === page ? 'page' : undefined}
           onClick={() => onChange(pageNumber)}
-          className={`grid h-9 min-w-9 place-items-center rounded-xl px-2 text-xs font-black transition ${pageNumber === page ? 'bg-blue-600 text-white shadow-sm' : 'border border-blue-100 bg-white text-blue-700 hover:bg-blue-50'}`}
+          className={`grid h-9 min-w-9 place-items-center rounded-md px-2 text-xs font-semibold transition ${pageNumber === page ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
         >
           {pageNumber}
         </button>
@@ -378,7 +387,7 @@ function Pagination({ page, totalPages, onChange }: {
         type="button"
         disabled={page === totalPages}
         onClick={() => onChange(page + 1)}
-        className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
       >
         Sau
       </button>
@@ -387,15 +396,15 @@ function Pagination({ page, totalPages, onChange }: {
 }
 
 function filterButtonClass(active: boolean) {
-  return `rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+  return `rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
     active
-      ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-      : 'border border-blue-100 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+      ? 'bg-slate-800 text-white'
+      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
   }`
 }
 
-function difficultyClass(difficulty: ProblemDifficulty) {
-  if (difficulty === 'EASY') return 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-  if (difficulty === 'MEDIUM') return 'border border-amber-500/30 bg-amber-500/10 text-amber-400'
-  return 'border border-rose-500/30 bg-rose-500/10 text-rose-400'
+function difficultyTextClass(difficulty: ProblemDifficulty) {
+  if (difficulty === 'EASY') return 'text-emerald-600'
+  if (difficulty === 'MEDIUM') return 'text-amber-600'
+  return 'text-red-600'
 }
