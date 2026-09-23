@@ -4,9 +4,9 @@ spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5433/devedu}
-    username: ${DB_USERNAME:devedu}
-    password: ${DB_PASSWORD:devedu}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   sql:
     init:
       mode: always
@@ -25,7 +25,7 @@ security:
     secret: ${JWT_SECRET:${random.uuid}${random.uuid}}
     expiration: ${JWT_EXPIRATION:PT1H}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:https://devedu-2.onrender.com}
   bootstrap-admin:
     name: ${ADMIN_NAME:}
     email: ${ADMIN_EMAIL:}
@@ -38,7 +38,7 @@ security:
       client-id: ${GITHUB_CLIENT_ID:}
       client-secret: ${GITHUB_CLIENT_SECRET:}
     redirect-base-uri: ${OAUTH_REDIRECT_BASE_URI:http://localhost:5173/login/oauth2/code}
-    frontend-callback-uri: ${OAUTH_FRONTEND_CALLBACK_URI:http://localhost:5173/auth/callback}
+    frontend-callback-uri: ${OAUTH_FRONTEND_CALLBACK_URI:https://devedu-2.onrender.com/auth/callback}
 
 judge:
   docker-command: ${JUDGE_DOCKER_COMMAND:docker}
@@ -66,4 +66,4 @@ course:
   material-storage-root: ${COURSE_MATERIAL_STORAGE_ROOT:${java.io.tmpdir}/devedu-course-materials}
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
