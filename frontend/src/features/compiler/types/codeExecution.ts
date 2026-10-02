@@ -4,6 +4,7 @@ export interface CodeExecutionRequest {
   language: CodeLanguage
   code: string
   input: string
+  files?: Record<string, string>
 }
 
 export interface CodeExecutionResponse {

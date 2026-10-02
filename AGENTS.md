@@ -65,6 +65,8 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - `ExecuteCodeUseCase` là input port; `CodeExecutionService` gọi `CodeExecutionPort` để thực thi qua Docker sandbox.
 - REST contract `POST /api/code/execute` là public và trả `SUCCESS`, `COMPILE_ERROR`, `RUNTIME_ERROR` hoặc `TIME_LIMIT` cùng output thực tế.
 - Compiler và Code Judge dùng chung adapter sandbox nhưng giữ input port/application service độc lập; Compiler chạy một lần với input tùy chọn, còn Programming Problems chấm theo test case ẩn.
+- Compiler Java hỗ trợ `files` tùy chọn trong `/api/code/execute`: map tên file phụ sang nội dung; `code` vẫn là `Main.java`. Tối đa 20 file và tổng 100.000 ký tự, tên file class Java phẳng, không đường dẫn/package, không trùng tên (kể cả hoa/thường). Compile toàn bộ `.java` trong Docker rồi chạy `Main`; giữ tương thích request một file.
+- Compiler hiển thị `HTML` thành “Web” nhưng giữ mã API `HTML`. Frontend có `index.html`, `style.css`, `script.js`; HTML vẫn qua CodeExecutionPort, sau đó frontend ghép tài nguyên local vào preview. JavaScript chỉ chạy trong iframe `allow-scripts` không `allow-same-origin`, CSP chặn fetch/tài nguyên ngoài/frame/form/base; không chạy trong trang cha hoặc JVM. Không thay đổi contract draft/submission của Problems thành nhiều file.
 
 ### Code Judge
 
@@ -111,24 +113,10 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - Slug bài tập dùng tiếng Việt không dấu, phân tách bằng dấu gạch ngang để URL ngắn và dễ đọc.
 - Topic hiển thị thành hàng lọc riêng phía trên thanh search/sort/filter. Danh sách hiển thị mỗi bài trên một hàng gọn cùng acceptance rate từ lượt chạy thử; bài đã giải có dấu tích lấy từ tiến độ `ACCEPTED` đã lưu và đồng bộ lại ngay sau Submit. Chạy thử `SUCCESS` hiển thị trạng thái và dấu tích màu xanh nhưng không được tính là đã giải.
 
-### Course/Lesson
+### Module đã gỡ bỏ
 
-- Domain gồm `Course`, `CourseStatus`, `CourseTopic`, `Lesson`, `LessonProgress`, `CourseEnrollment` và `CourseMaterial`; không phụ thuộc Spring/JPA/web. Course lưu ngày bắt đầu, ngày kết thúc tùy chọn và xác định trạng thái `ACTIVE`/`ENDED` theo ngày hiện tại.
-- Quản lý nội dung đi qua `CourseLearningUseCase`; persistence đi qua output port và adapter trong `infrastructure/persistence/course`.
-- Workflow lớp và bài lập trình đi qua `CourseClassroomUseCase`. `CourseProblemAssignment` chỉ liên kết lớp với bài tập hiện có; không sao chép đề hoặc test case sang module Course.
-- Giáo viên chỉ được quản lý khóa học do chính mình tạo; `ADMIN` có thể quản lý mọi khóa học.
-- `GET /api/teacher/courses` trả danh sách lớp được quản lý cùng số sinh viên và trạng thái; không trả lớp của giáo viên khác cho `TEACHER`.
-- Quản lý thành viên lớp đi qua `CourseLearningUseCase`: roster trả email/ngày tham gia, tìm ứng viên theo tên/email/mã sinh viên, thêm nhiều và xóa nhiều. Mọi endpoint thành viên phải kiểm tra giáo viên sở hữu lớp hoặc role `ADMIN`; không trả UUID nội bộ của sinh viên.
-- Giáo viên/admin chỉ được sửa `displayName` của enrollment trong phạm vi lớp; không được dùng chức năng lớp để sửa tên, email hoặc thông tin tài khoản toàn cục của sinh viên.
-- Danh sách môn học, chi tiết khóa học và lesson là public. Đánh dấu lesson hoàn thành chấp nhận JWT của `STUDENT`, `TEACHER` hoặc `ADMIN` và lưu tiến độ theo chính tài khoản thực hiện.
-- Tiến độ hoàn thành là idempotent theo cặp student/lesson; không tạo bản ghi trùng khi gọi lại.
-- Giáo viên thêm sinh viên vào khóa học của mình bằng một mã sinh viên hoặc file TXT UTF-8 chứa tối đa 1000 mã; import phải kiểm tra toàn bộ mã trước khi lưu và enrollment idempotent theo cặp course/student.
-- Giáo viên sở hữu lớp/admin có thể gán hoặc gỡ bài lập trình. Sinh viên chỉ đọc được lớp đã enrollment; tiến trình bằng số bài được gán đã có submission `ACCEPTED` chia tổng số bài được gán (lớp chưa có bài trả 0%).
-- Tài liệu lớp chỉ nhận PDF, Word (`.doc`, `.docx`) hoặc PowerPoint (`.ppt`, `.pptx`), tối đa 20 MB. Metadata đi qua persistence port; byte file đi qua `CourseFileStorage` và local named volume `devedu_course_materials`. Tên file client không được dùng làm đường dẫn storage.
-- Chỉ giáo viên sở hữu khóa học/admin được upload và xem danh sách lớp. Tài khoản đã enrollment ở bất kỳ role nào, giáo viên sở hữu hoặc admin được list/download tài liệu; response file phải có content type chuẩn, `nosniff` và Content-Disposition an toàn.
-- Video vẫn chỉ là URL HTTP/HTTPS được lưu cùng lesson. Không tự ý thêm object storage, transcoding hoặc streaming infrastructure.
-- Frontend code của module nằm trong `src/features/course-learning`.
-- `/courses` là một trang “Lớp học” duy nhất. Giáo viên/admin quản lý tab Sinh viên, Bài tập và Tiến trình; `GET /api/teacher/courses/{courseId}/student-progress` trả tiến trình theo submission `ACCEPTED` của từng sinh viên và phải truy vấn theo lô, không N+1. Sinh viên thấy các lớp đã tham gia; giáo viên/admin có thể chuyển giữa chế độ quản lý và học tập, trong đó giáo viên học trên lớp mình sở hữu hoặc đã tham gia còn admin có thể mở mọi lớp. Chế độ học có tab Bài tập/Tiến trình và mở bài qua `/problems/{slug}`. Roster phân trang 10 người, dùng bảng desktop/card mobile, hỗ trợ tìm kiếm, chọn nhiều và confirmation trước khi xóa. Không khôi phục `TeacherCourseStudio` hoặc tạo route chi tiết lớp riêng.
+- Module Lớp học (Course/Lesson), route `/courses` và các API liên quan đã được gỡ bỏ. Không khôi phục khi chưa có yêu cầu của người dùng.
+- Không tự động xóa bảng dữ liệu lớp học hoặc volume tài liệu cũ. Schema mới không tạo bảng lớp học; dữ liệu cũ được giữ lại để có thể khôi phục thủ công.
 
 ### Exam
 
@@ -158,7 +146,7 @@ Không gom toàn bộ component, hook hoặc service của nhiều feature vào 
 
 Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím, autocomplete tĩnh/biến đã khai báo và syntax highlighting theo ngôn ngữ cho type, keyword, string, number, function và comment; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems có thao tác chạy input tùy chỉnh riêng; nút chạy test chấm toàn bộ test case ẩn và hiển thị đạt/trượt từng case. Input khi Submit luôn lấy từ test case ẩn của backend.
 
-Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/courses`, `/exams`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
+Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/exams`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
 
 Authentication frontend nằm trong `src/features/auth`, gồm `/login`, `/register` và `/auth/callback`. Header chỉ đọc trạng thái đăng nhập tối thiểu để hiển thị avatar, tên và menu logout; không hiển thị email trên navbar. Request và lưu/xóa token thuộc feature auth.
 
@@ -187,7 +175,6 @@ Quản trị user frontend nằm trong `src/features/admin-users` tại `/admin/
 - Không over-engineering: không thêm abstraction, generic framework, event bus, CQRS, DDD pattern hay infrastructure khi chưa có yêu cầu thực tế.
 - Không sửa file hoặc module ngoài phạm vi task.
 - Không mở rộng authentication hoặc triển khai compiler, exam hay AI nếu task không yêu cầu rõ ràng.
-- Với Course/Lesson, không tự ý thêm upload/storage, streaming, enrollment, payment, quiz hoặc certificate.
 - Với Exam, không tự ý thêm proctoring/chống gian lận, webcam, browser lockdown, code judge hoặc chấm điểm coding giả.
 - Với Compiler code execution, luôn đi qua `CodeExecutionPort` và Docker sandbox; không chạy source trong JVM/Spring Boot hoặc nối Compiler vào logic chấm test case của Programming Problems.
 - Không nới lỏng giới hạn sandbox, đưa source/input vào shell command hoặc cho sandbox truy cập network/host filesystem.

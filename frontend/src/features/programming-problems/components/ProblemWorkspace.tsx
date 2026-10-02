@@ -287,10 +287,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
       </button>
 
       {/* Main Workspace Frame */}
-      <div className={`grid overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(390px,0.92fr)_minmax(0,1.48fr)]'}`}>
+      <div className={`grid isolate overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.48fr)]'}`}>
         {/* Problem Statement Pane */}
         {!statementCollapsed ? (
-          <article className="border-b border-slate-200 bg-white p-6 sm:p-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
+          <article className="min-w-0 border-b border-slate-200 bg-white p-6 sm:p-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
             <div className="flex items-start justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-blue-400">
@@ -365,7 +365,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
         ) : null}
 
         {/* Code Editor & Execution Pane */}
-        <div className="flex min-h-[600px] flex-col bg-slate-950 text-slate-100">
+        <div className="relative z-0 flex min-h-[600px] min-w-0 flex-col bg-slate-950 text-slate-100">
           {/* Top action toolbar */}
           <div className="flex flex-col gap-3 border-b border-white/10 bg-slate-900/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -448,10 +448,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
           </div>
 
           {/* Split editor & IO */}
-          <div className="grid min-h-[610px] flex-1 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
-            <div className="flex min-h-[420px] flex-col border-b border-white/10 lg:border-r lg:border-b-0">
+          <div className="grid h-[610px] min-w-0 flex-1 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
+            <div className="flex min-h-[420px] min-w-0 flex-col border-b border-white/10 lg:border-r lg:border-b-0">
               <SmartCodeEditor
-                key={language}
+                key={`${language}-${statementCollapsed ? 'statement-collapsed' : 'statement-open'}`}
                 editorId="problem-code-editor"
                 language={language}
                 value={sourceCode}
@@ -463,10 +463,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               />
             </div>
 
-            <div className={`grid min-h-[360px] bg-slate-950/90 dark-scroll ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-2'}`}>
+            <div className={`grid min-h-0 bg-slate-950/90 dark-scroll ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-[minmax(0,1fr)_minmax(0,1fr)]'}`}>
               {/* Input test case */}
               {!isSqlWorkspace ? (
-              <div className="flex min-h-[180px] flex-col border-b border-white/10">
+              <div className="flex min-h-0 flex-col border-b border-white/10">
                 <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-slate-900/60 px-4 py-2 text-xs">
                   <label htmlFor="problem-input" className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Input chạy thử
@@ -505,7 +505,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               ) : null}
 
               {/* Output & Judge status */}
-              <div className="flex min-h-[180px] flex-col bg-slate-950">
+              <div className="flex min-h-0 flex-col overflow-hidden bg-slate-950">
                 <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-slate-900/60 px-4 py-2 text-xs">
                   <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">Output</span>
                   {runStatus === 'SUCCESS' ? (
@@ -522,6 +522,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                     </span>
                   ) : null}
                 </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
                 {testCaseResults.length > 0 ? (
                   <>
                     <div className="flex flex-wrap gap-2 border-b border-white/10 p-3">
@@ -576,10 +577,11 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                 {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} /> : null}
                 <pre
                   aria-live="polite"
-                  className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
+                  className="min-h-[8rem] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
                 >
                   {output}
                 </pre>
+                </div>
               </div>
             </div>
           </div>

@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CodeCompiler } from '../features/compiler/components/CodeCompiler'
-import { CourseLearning } from '../features/course-learning/components/CourseLearning'
 import { ExamModule } from '../features/exam/components/ExamModule'
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
 import { AddProgrammingProblemPage } from '../features/programming-problems/components/AddProgrammingProblemPage'
@@ -13,7 +12,6 @@ import { FlashToast } from '../shared/components/FlashToast'
 import { setPendingFlash, takePendingFlash } from '../shared/flashMessage'
 import {
   IconArrowLeft,
-  IconBookOpen,
   IconChevronDown,
   IconCode,
   IconLogOut,
@@ -33,7 +31,6 @@ interface RouteDefinition {
 const navigationRoutes: RouteDefinition[] = [
   { path: '/', label: 'Trình biên dịch', title: 'Trình biên dịch · DevEdu', content: <CodeCompiler />, icon: IconTerminal },
   { path: '/problems', label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems />, icon: IconCode },
-  { path: '/courses', label: 'Lớp học', title: 'Lớp học · DevEdu', content: <CourseLearning />, icon: IconBookOpen },
   { path: '/exams', label: 'Kỳ thi', title: 'Kỳ thi · DevEdu', content: <ExamModule />, icon: IconTrophy },
 ]
 

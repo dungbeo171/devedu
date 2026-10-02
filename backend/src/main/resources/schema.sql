@@ -83,72 +83,6 @@ CREATE TABLE IF NOT EXISTS exam_answers (
     UNIQUE (attempt_id, question_id)
 );
 
-CREATE TABLE IF NOT EXISTS courses (
-    id UUID PRIMARY KEY,
-    slug VARCHAR(120) NOT NULL UNIQUE,
-    title VARCHAR(180) NOT NULL,
-    description TEXT NOT NULL,
-    teacher_id UUID NOT NULL REFERENCES users(id),
-    start_date DATE NOT NULL,
-    end_date DATE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-ALTER TABLE courses ADD COLUMN IF NOT EXISTS start_date DATE;
-UPDATE courses SET start_date = (created_at AT TIME ZONE 'UTC')::date WHERE start_date IS NULL;
-ALTER TABLE courses ALTER COLUMN start_date SET NOT NULL;
-ALTER TABLE courses ADD COLUMN IF NOT EXISTS end_date DATE;
-ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_date_range_check;
-ALTER TABLE courses ADD CONSTRAINT courses_date_range_check CHECK (end_date IS NULL OR end_date >= start_date);
-
-CREATE TABLE IF NOT EXISTS course_topics (
-    id UUID PRIMARY KEY,
-    course_id UUID NOT NULL REFERENCES courses(id),
-    title VARCHAR(180) NOT NULL,
-    position INTEGER NOT NULL CHECK (position > 0),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS lessons (
-    id UUID PRIMARY KEY,
-    topic_id UUID NOT NULL REFERENCES course_topics(id),
-    title VARCHAR(180) NOT NULL,
-    content TEXT NOT NULL,
-    video_url VARCHAR(2048),
-    position INTEGER NOT NULL CHECK (position > 0),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS lesson_progress (
-    id UUID PRIMARY KEY,
-    student_id UUID NOT NULL REFERENCES users(id),
-    lesson_id UUID NOT NULL REFERENCES lessons(id),
-    completed_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    UNIQUE (student_id, lesson_id)
-);
-
-CREATE TABLE IF NOT EXISTS course_enrollments (
-    id UUID PRIMARY KEY,
-    course_id UUID NOT NULL REFERENCES courses(id),
-    student_id UUID NOT NULL REFERENCES users(id),
-    enrolled_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    UNIQUE (course_id, student_id)
-);
-ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
-
-CREATE TABLE IF NOT EXISTS course_materials (
-    id UUID PRIMARY KEY,
-    course_id UUID NOT NULL REFERENCES courses(id),
-    title VARCHAR(180) NOT NULL,
-    original_file_name VARCHAR(255) NOT NULL,
-    storage_key VARCHAR(100) NOT NULL UNIQUE,
-    content_type VARCHAR(150) NOT NULL,
-    size_bytes BIGINT NOT NULL CHECK (size_bytes > 0),
-    uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_course_enrollments_course ON course_enrollments (course_id, enrolled_at);
-CREATE INDEX IF NOT EXISTS idx_course_enrollments_student ON course_enrollments (student_id, enrolled_at);
-CREATE INDEX IF NOT EXISTS idx_course_materials_course ON course_materials (course_id, uploaded_at DESC);
 
 CREATE TABLE IF NOT EXISTS programming_problems (
     id UUID PRIMARY KEY,
@@ -230,24 +164,11 @@ CREATE TABLE IF NOT EXISTS problem_drafts (
     CONSTRAINT uk_problem_drafts_student_problem UNIQUE (student_id, problem_id)
 );
 
-CREATE TABLE IF NOT EXISTS course_problem_assignments (
-    id UUID PRIMARY KEY,
-    course_id UUID NOT NULL REFERENCES courses(id),
-    problem_id UUID NOT NULL REFERENCES programming_problems(id),
-    assigned_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    UNIQUE (course_id, problem_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_course_problem_assignments_course
-    ON course_problem_assignments (course_id, assigned_at);
 
 CREATE INDEX IF NOT EXISTS idx_exams_scheduled_at ON exams (scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_exams_teacher_scheduled_at ON exams (teacher_id, scheduled_at);
 CREATE INDEX IF NOT EXISTS idx_exam_attempts_exam_started_at ON exam_attempts (exam_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_exam_answers_attempt_answered_at ON exam_answers (attempt_id, answered_at);
-CREATE INDEX IF NOT EXISTS idx_courses_title ON courses (title);
-CREATE INDEX IF NOT EXISTS idx_course_topics_course_position ON course_topics (course_id, position);
-CREATE INDEX IF NOT EXISTS idx_lessons_topic_position ON lessons (topic_id, position);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_title ON programming_problems (title);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_topic_title ON programming_problems (topic, title);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_filters

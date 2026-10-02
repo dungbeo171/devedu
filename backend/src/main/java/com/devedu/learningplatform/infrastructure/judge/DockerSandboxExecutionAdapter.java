@@ -75,6 +75,14 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
             makeContainerWritable(buildDirectory);
             var runner = runner(command.language());
             Files.writeString(sourceDirectory.resolve(runner.fileName()), command.code(), StandardCharsets.UTF_8);
+            for (var file : command.files().entrySet()) {
+                var target = sourceDirectory.resolve(file.getKey()).normalize();
+                if (!target.getParent().equals(sourceDirectory) || !file.getKey().endsWith(".java")) {
+                    throw new IllegalArgumentException("Invalid Java source file path");
+                }
+                Files.writeString(target, file.getValue(), StandardCharsets.UTF_8,
+                        java.nio.file.StandardOpenOption.CREATE_NEW);
+            }
 
             if (runner.compileScript() != null) {
                 var compilation = runContainer(executionId, "compile", runner.image(), runner.user(),
@@ -259,7 +267,7 @@ public class DockerSandboxExecutionAdapter implements SandboxExecutionPort, Code
                     "g++ /workspace/Main.cpp -O2 -std=c++17 -o /build/main",
                     "exec /build/main");
             case JAVA -> new Runner(settings.javaImage(), "Main.java", "65534:65534",
-                    "javac -encoding UTF-8 -d /build /workspace/Main.java",
+                    "javac -encoding UTF-8 -d /build /workspace/*.java",
                     "exec java -Xms16m -Xmx128m -XX:ActiveProcessorCount=1 -cp /build Main");
             case PYTHON -> new Runner(settings.pythonImage(), "main.py", "65534:65534",
                     "python -c \"import py_compile; py_compile.compile('/workspace/main.py', cfile='/build/main.pyc', doraise=True)\"",

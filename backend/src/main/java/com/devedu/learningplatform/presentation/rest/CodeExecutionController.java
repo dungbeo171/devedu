@@ -23,7 +23,7 @@ public class CodeExecutionController {
     @PostMapping("/execute")
     public ResponseEntity<CodeExecutionResponse> execute(@RequestBody CodeExecutionRequest request) {
         var result = executeCodeUseCase.execute(
-                new ExecuteCodeCommand(request.language(), request.code(), request.input())
+                new ExecuteCodeCommand(request.language(), request.code(), request.input(), request.files())
         );
         return ResponseEntity.ok(
                 new CodeExecutionResponse(result.language(), result.status(), result.output())

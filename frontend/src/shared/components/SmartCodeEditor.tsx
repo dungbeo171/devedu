@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
-export type EditorLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL'
+export type EditorLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL' | 'CSS' | 'JAVASCRIPT'
 
 interface SmartCodeEditorProps {
   editorId?: string
@@ -27,6 +27,8 @@ const indent = '    '
 const maxHistoryEntries = 200
 
 const languageTypes: Record<EditorLanguage, Set<string>> = {
+  CSS: new Set(['px', 'rem', 'em', 'vh', 'vw', 'rgb', 'rgba']),
+  JAVASCRIPT: new Set(['Array', 'Object', 'String', 'Number', 'Boolean', 'Promise', 'Map', 'Set']),
   CPP: new Set(['auto', 'bool', 'char', 'double', 'float', 'int', 'long', 'short', 'signed', 'size_t', 'string', 'unsigned', 'void']),
   JAVA: new Set(['boolean', 'byte', 'char', 'double', 'float', 'int', 'long', 'short', 'void', 'String', 'Scanner', 'List', 'Map', 'Set']),
   PYTHON: new Set(['bool', 'bytes', 'dict', 'float', 'int', 'list', 'set', 'str', 'tuple']),
@@ -35,6 +37,8 @@ const languageTypes: Record<EditorLanguage, Set<string>> = {
 }
 
 const languageKeywords: Record<EditorLanguage, Set<string>> = {
+  CSS: new Set(['auto', 'none', 'block', 'flex', 'grid', 'solid', 'relative', 'absolute', 'important', 'inherit']),
+  JAVASCRIPT: new Set(['async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do', 'else', 'export', 'extends', 'finally', 'for', 'from', 'function', 'if', 'import', 'in', 'instanceof', 'let', 'new', 'of', 'return', 'static', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'yield']),
   CPP: new Set(['break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'delete', 'do', 'else', 'enum', 'for', 'if', 'include', 'namespace', 'new', 'private', 'protected', 'public', 'return', 'struct', 'switch', 'template', 'throw', 'try', 'using', 'while']),
   JAVA: new Set(['abstract', 'break', 'case', 'catch', 'class', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extends', 'final', 'finally', 'for', 'if', 'implements', 'import', 'interface', 'new', 'package', 'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw', 'throws', 'try', 'while']),
   PYTHON: new Set(['and', 'as', 'assert', 'async', 'await', 'break', 'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield']),
@@ -47,6 +51,20 @@ const codeTokenPattern = /"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\
 const htmlTokenPattern = /<\/?|\/?>|"[^"\n]*"|'[^'\n]*'|&[A-Za-z0-9#]+;|\b\d+(?:\.\d+)?\b|[A-Za-z_:][\w:.-]*|=/g
 
 const completions: Record<EditorLanguage, Completion[]> = {
+  CSS: [
+    { label: 'display', detail: 'Layout', insertText: 'display: flex;' },
+    { label: 'background', detail: 'Background color', insertText: 'background: ;', cursorOffset: -1 },
+    { label: 'color', detail: 'Text color', insertText: 'color: ;', cursorOffset: -1 },
+    { label: 'padding', detail: 'Inner spacing', insertText: 'padding: ;', cursorOffset: -1 },
+    { label: 'margin', detail: 'Outer spacing', insertText: 'margin: ;', cursorOffset: -1 },
+  ],
+  JAVASCRIPT: [
+    { label: 'console.log', detail: 'Console output', insertText: 'console.log();', cursorOffset: -2, triggers: ['log'] },
+    { label: 'document.querySelector', detail: 'Select element', insertText: "document.querySelector('')", cursorOffset: -2, triggers: ['querySelector'] },
+    { label: 'function', detail: 'Declare function', insertText: 'function name() {\n    \n}', cursorOffset: -3 },
+    { label: 'const', detail: 'Declare constant', insertText: 'const ' },
+    { label: 'let', detail: 'Declare variable', insertText: 'let ' },
+  ],
   CPP: [
     { label: 'cout', detail: 'Standard output', insertText: 'cout << ;', cursorOffset: -1 },
     { label: 'cin', detail: 'Standard input', insertText: 'cin >> ;', cursorOffset: -1 },
@@ -342,11 +360,11 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
   const suggestionsId = `${editorId}-suggestions`
 
   return (
-    <div className="grid flex-1 grid-cols-[3.25rem_minmax(0,1fr)] bg-blue-950">
+    <div className="relative isolate grid min-h-[500px] min-w-0 flex-1 grid-cols-[3.25rem_minmax(0,1fr)] bg-blue-950">
       <div aria-hidden="true" className="select-none border-r border-blue-800 bg-blue-900 py-4 pr-3 text-right font-mono text-xs leading-6 text-blue-300">
         {lineNumbers.map((line) => <div key={line}>{line}</div>)}
       </div>
-      <div className="relative min-w-0">
+      <div className="relative min-h-[500px] min-w-0">
         <label className="sr-only" htmlFor={editorId}>Code editor</label>
         <div aria-hidden="true" className="code-editor-text pointer-events-none absolute inset-0 z-0 overflow-hidden p-4 text-white">
           <pre
@@ -374,11 +392,12 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
           onSelect={updateSelection}
           onScroll={(event) => setScroll({ top: event.currentTarget.scrollTop, left: event.currentTarget.scrollLeft })}
           spellCheck={false}
+          wrap="off"
           autoCapitalize="off"
           autoCorrect="off"
           aria-autocomplete="list"
           aria-controls={suggestionsId}
-          className="code-editor-text relative z-10 h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-blue-300 outline-none selection:bg-blue-600/30"
+          className="code-editor-text absolute inset-0 z-10 block h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-blue-300 outline-none selection:bg-blue-600/30"
         />
         {suggestions.length > 0 && suggestionPosition.top >= 0 ? (
           <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-30 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-xl border border-blue-200 bg-white shadow-xl shadow-blue-900/20">
@@ -500,7 +519,7 @@ function tokenizeComments(value: string, language: EditorLanguage): CodeSegment[
       continue
     }
 
-    const lineComment = value.startsWith('//', cursor) && (language === 'CPP' || language === 'JAVA')
+    const lineComment = value.startsWith('//', cursor) && (language === 'CPP' || language === 'JAVA' || language === 'JAVASCRIPT')
       || value.startsWith('--', cursor) && language === 'MYSQL'
       || character === '#' && (language === 'PYTHON' || language === 'MYSQL')
 
@@ -539,7 +558,7 @@ function tokenizeHtmlComments(value: string): CodeSegment[] {
 
 function isStringDelimiter(character: string, language: EditorLanguage) {
   if (character === '"' || character === "'") return true
-  return character === '`' && language === 'MYSQL'
+  return character === '`' && (language === 'MYSQL' || language === 'JAVASCRIPT')
 }
 
 function skipString(value: string, start: number, language: EditorLanguage) {
@@ -592,6 +611,8 @@ function declaredIdentifierCompletions(value: string, cursor: number, language: 
   } else if (language === 'CPP' || language === 'JAVA') {
     collect(/\b(?:const\s+)?(?:unsigned\s+|signed\s+)?(?:int|long|short|double|float|char|bool|boolean|String|string|auto|var|Scanner|List(?:<[^>\n]+>)?|Map(?:<[^>\n]+>)?|Set(?:<[^>\n]+>)?)\s+([A-Za-z_]\w*)/g)
     collect(/\bfor\s*\(\s*(?:int|long|short|double|float|char|var|auto)\s+([A-Za-z_]\w*)/g)
+  } else if (language === 'JAVASCRIPT') {
+    collect(/\b(?:const|let|var|function|class)\s+([A-Za-z_]\w*)/g)
   } else if (language === 'MYSQL') {
     collect(/\bAS\s+([A-Za-z_]\w*)/gi)
   }

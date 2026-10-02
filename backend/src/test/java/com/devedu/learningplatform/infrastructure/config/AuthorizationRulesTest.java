@@ -60,12 +60,6 @@ class AuthorizationRulesTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/problems/demo"))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/courses"))
-                .andExpect(status().isOk());
-        mockMvc.perform(get("/api/courses/java-core"))
-                .andExpect(status().isOk());
-        mockMvc.perform(get("/api/lessons/20000000-0000-0000-0000-000000000001"))
-                .andExpect(status().isOk());
     }
 
     @Test
@@ -75,8 +69,6 @@ class AuthorizationRulesTest {
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.path").value("/api/student/test"));
         mockMvc.perform(get("/api/problems/demo/private"))
-                .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/courses/java-core/private"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -155,15 +147,6 @@ class AuthorizationRulesTest {
     }
 
     @Test
-    void allAuthenticatedRolesCanCompleteLessons() throws Exception {
-        var path = "/api/student/lessons/20000000-0000-0000-0000-000000000001/complete";
-        mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
-        mockMvc.perform(post(path).header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(post(path).header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
-        mockMvc.perform(post(path).header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
-    }
-
-    @Test
     void allAuthenticatedRolesCanAccessExamParticipationEndpoints() throws Exception {
         mockMvc.perform(get("/api/exams")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/exams").header("Authorization", "Bearer student-token")).andExpect(status().isOk());
@@ -214,18 +197,6 @@ class AuthorizationRulesTest {
         public ResponseEntity<Void> problemDetail() {
             return ResponseEntity.ok().build();
         }
-
-        @GetMapping("/api/courses")
-        public ResponseEntity<Void> courses() { return ResponseEntity.ok().build(); }
-
-        @GetMapping("/api/courses/java-core")
-        public ResponseEntity<Void> courseDetail() { return ResponseEntity.ok().build(); }
-
-        @GetMapping("/api/lessons/20000000-0000-0000-0000-000000000001")
-        public ResponseEntity<Void> lessonDetail() { return ResponseEntity.ok().build(); }
-
-        @PostMapping("/api/student/lessons/20000000-0000-0000-0000-000000000001/complete")
-        public ResponseEntity<Void> completeLesson() { return ResponseEntity.ok().build(); }
 
         @GetMapping("/api/exams")
         public ResponseEntity<Void> exams() { return ResponseEntity.ok().build(); }

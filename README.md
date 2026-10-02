@@ -90,7 +90,6 @@ Các trang frontend:
 
 - `/` — Code Compiler
 - `/problems` — Programming Problems
-- `/courses` — Lớp học dành cho giáo viên/admin
 - `/exams` — Exam
 
 Đổi cổng host bằng `FRONTEND_PORT`, `BACKEND_PORT` hoặc `POSTGRES_PORT`. Dừng stack bằng `docker compose down`. `docker compose down -v` còn xóa toàn bộ database và workspace volume, vì vậy chỉ dùng khi chủ động muốn xóa dữ liệu local.
@@ -188,8 +187,8 @@ Authorization: Bearer <access-token>
 Quy tắc quyền:
 
 - `/api/auth/register`, `/api/auth/login`, `/api/system/status`: public.
-- `GET /api/problems`, `GET /api/problems/{slug}`, `GET /api/courses`, `GET /api/courses/{slug}` và `GET /api/lessons/{id}`: public.
-- Submit bài, tiến độ lesson và tham gia Exam: `STUDENT`, `TEACHER`, `ADMIN`; dữ liệu học tập luôn gắn với chính tài khoản thực hiện.
+- `GET /api/problems` và `GET /api/problems/{slug}`: public.
+- Submit bài và tham gia Exam: `STUDENT`, `TEACHER`, `ADMIN`; dữ liệu học tập luôn gắn với chính tài khoản thực hiện.
 - `/api/teacher/**`: `TEACHER` hoặc `ADMIN`.
 - `/api/admin/**`: chỉ `ADMIN`.
 
@@ -229,7 +228,7 @@ Frontend hiện đọc token từ local storage để phục vụ các feature �
 
 ## Database và hiệu năng
 
-Schema PostgreSQL đặt constraint cho role/status, khóa ngoại, uniqueness và các giới hạn nghiệp vụ chính. Các index phục vụ list/filter/order hiện tại được tạo idempotent trong `schema.sql`, gồm catalog, topic/difficulty, course hierarchy, exam/attempt/answer và submission history.
+Schema PostgreSQL đặt constraint cho role/status, khóa ngoại, uniqueness và các giới hạn nghiệp vụ chính. Các index phục vụ list/filter/order hiện tại được tạo idempotent trong `schema.sql`, gồm catalog, topic/difficulty, exam/attempt/answer và submission history.
 
 Adapter Exam tải options theo batch khi đọc danh sách câu hỏi để tránh N+1 query; danh sách exam do giáo viên quản lý được lọc ngay tại repository. Các API list hiện trả toàn bộ dữ liệu vì dataset foundation nhỏ. Khi dữ liệu thực tế tăng, thêm pagination vào contract theo từng module thay vì thêm cache hoặc abstraction chung trước nhu cầu.
 
@@ -239,7 +238,13 @@ Adapter Exam tải options theo batch khi đọc danh sách câu hỏi để tr�
 
 Editor dùng chung của Compiler và Programming Problems hỗ trợ autocomplete theo ngôn ngữ, gợi ý các biến đã khai báo trước vị trí con trỏ, syntax highlighting riêng cho type/keyword/string/number/function/comment, `Tab`, `Shift+Tab`, auto-indent, auto-pair, `Ctrl+Space`, `Ctrl+Z` và `Ctrl+Y`/`Ctrl+Shift+Z`. Input trên Compiler là tùy chọn; nếu để trống, frontend gửi input mẫu mặc định của ngôn ngữ. Khi submit Programming Problems, input và expected output luôn do test case ẩn của backend cung cấp.
 
-Trang `/` cung cấp giao diện compiler responsive cho C++, Java, Python, HTML và MySQL:
+Trang `/` cung cấp giao diện compiler responsive cho C++, Java, Python, Web và MySQL:
+
+- Java: danh sách file ở bên trái editor, thu gọn/mở lại bằng nút **File** trên thanh công cụ; thêm/xóa file `.java` phụ. Điểm vào luôn là `Main.java` (không dùng package). Tối đa 20 file, tổng mã nguồn 100.000 ký tự. API `/api/code/execute` nhận thêm `files` tùy chọn, ví dụ `{"Helper.java":"public class Helper {}"}`; `code` vẫn chứa nội dung `Main.java`. Request cũ không có `files` vẫn hoạt động.
+- Web: có sẵn `index.html`, `style.css`, `script.js`. Giữ các thẻ liên kết `href="style.css"`, `src="script.js"` để ghép CSS/JavaScript khi chạy. Mã API vẫn là `HTML`. Preview chạy script trong iframe cách ly, chặn fetch/tài nguyên ngoài, truy cập trang cha và gửi form; không hỗ trợ CDN hoặc thư viện bên ngoài.
+- Chuyển file/ngôn ngữ giữ nội dung và undo trong phiên mở trang; chưa lưu project compiler xuống database. Bài tập và submission tiếp tục dùng contract một file hiện có.
+
+Kiểm tra phần ghép file Web bằng Node 22.18+ hoặc Node 24: `node --test frontend/src/features/compiler/webProject.test.mjs`.
 
 - Chọn ngôn ngữ và starter code tương ứng.
 - Code editor có số dòng, autocomplete theo ngôn ngữ, `Tab` để nhận gợi ý/thụt lề, `Shift+Tab` để bỏ thụt lề, `Enter` tự giữ indent, tự đóng ngoặc/nháy và `Ctrl+Space` để mở gợi ý.
@@ -362,64 +367,11 @@ C++/Java/Python được compile riêng và mỗi test chạy trong container m�
 
 Frontend lấy access token từ key `devedu.accessToken` (fallback `accessToken`) trong local storage khi chạy test hoặc submit. Chạy test, lưu bản nháp, submit và tiến độ cá nhân dùng được với cả `STUDENT`, `TEACHER` và `ADMIN`.
 
-## Course/Lesson
+## Lớp học đã được gỡ bỏ
 
-Trang `/courses` là màn hình “Lớp học” duy nhất. Giáo viên/admin có thể chuyển giữa chế độ quản lý và học tập: chế độ quản lý cho phép quản lý sinh viên, gán/gỡ bài lập trình và xem tiến trình; chế độ học tập cho phép mở bài và lưu tiến độ như sinh viên. Giáo viên thấy lớp mình sở hữu hoặc đã tham gia, admin có thể học trên mọi lớp. Tiến trình `ACCEPTED` tính theo `số bài đã giải / tổng bài được giao`; ví dụ 1/5 hiển thị 20%. `Teacher Studio` cũ đã được loại bỏ.
+Module Course/Lesson đã được gỡ khỏi frontend, backend và cấu hình Docker. URL `/courses` hiển thị trang không tìm thấy; các API lớp học, thành viên, tài liệu và lesson không còn được cung cấp.
 
-Thao tác sửa sinh viên trong lớp chỉ đổi tên hiển thị của enrollment; thông tin tài khoản toàn cục và email của sinh viên không bị thay đổi.
-
-API đọc nội dung (public):
-
-```http
-GET /api/courses
-GET /api/courses/{slug}
-GET /api/lessons/{lessonId}
-```
-
-API giáo viên (`TEACHER` hoặc `ADMIN`):
-
-```http
-POST /api/teacher/courses
-GET  /api/teacher/courses
-POST /api/teacher/courses/{courseId}/topics
-POST /api/teacher/topics/{topicId}/lessons
-PUT  /api/teacher/lessons/{lessonId}/video
-GET  /api/teacher/courses/{courseId}/students
-GET  /api/teacher/courses/{courseId}/student-progress
-POST /api/teacher/courses/{courseId}/students
-GET  /api/teacher/courses/{courseId}/student-candidates?q={query}
-POST /api/teacher/courses/{courseId}/students/bulk
-DELETE /api/teacher/courses/{courseId}/students
-GET  /api/teacher/courses/{courseId}/problems
-POST /api/teacher/courses/{courseId}/problems
-DELETE /api/teacher/courses/{courseId}/problems/{problemId}
-POST /api/teacher/courses/{courseId}/students/import
-POST /api/teacher/courses/{courseId}/materials
-Authorization: Bearer <teacher-access-token>
-```
-
-Import sinh viên dùng file `.txt` UTF-8, mỗi dòng một mã `SV...` (cũng chấp nhận dấu cách, dấu phẩy hoặc dấu chấm phẩy), tối đa 1000 mã và 1 MB. Upload tài liệu dùng `multipart/form-data`, chỉ nhận `.pdf`, `.doc`, `.docx`, `.ppt`, `.pptx`, tối đa 20 MB.
-
-`TEACHER` chỉ chỉnh sửa khóa học do mình tạo; `ADMIN` có thể quản lý mọi khóa học. Sinh viên đánh dấu hoàn thành bằng endpoint idempotent:
-
-```http
-POST /api/student/lessons/{lessonId}/complete
-GET  /api/courses/{courseId}/materials
-GET  /api/course-materials/{materialId}/content
-Authorization: Bearer <access-token>
-```
-
-API chế độ học tập của lớp (cả ba role đã xác thực):
-
-```http
-GET /api/student/courses
-GET /api/student/courses/{courseId}
-Authorization: Bearer <access-token>
-```
-
-Hai endpoint tài liệu cho tài khoản đã được thêm vào lớp ở bất kỳ role nào; giáo viên sở hữu và admin cũng có quyền truy cập.
-
-Frontend đọc token từ `devedu.accessToken` (fallback `accessToken`) cho các thao tác được bảo vệ.
+Bản cài mới không tạo bảng lớp học. Với database đã có, các bảng lớp học và volume `devedu_course_materials` cũ được giữ nguyên, không còn được ứng dụng sử dụng. Không chạy `docker compose down -v` để cập nhật vì có thể mất dữ liệu PostgreSQL. Mã nguồn đã gỡ có thể khôi phục từ Git nếu cần.
 
 ## Exam
 
@@ -482,4 +434,4 @@ npm audit
 
 ## Phạm vi hiện tại
 
-Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Course/Lesson, Exam và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.
+Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Exam và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.

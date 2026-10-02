@@ -4,21 +4,11 @@ import com.devedu.learningplatform.application.port.in.GetSystemStatusUseCase;
 import com.devedu.learningplatform.application.port.in.ProgrammingProblemsUseCase;
 import com.devedu.learningplatform.application.port.in.AuthenticationUseCase;
 import com.devedu.learningplatform.application.port.in.ExecuteCodeUseCase;
-import com.devedu.learningplatform.application.port.in.CourseLearningUseCase;
-import com.devedu.learningplatform.application.port.in.CourseClassroomUseCase;
 import com.devedu.learningplatform.application.port.in.ExamUseCase;
 import com.devedu.learningplatform.application.port.in.ListExternalAuthProvidersUseCase;
 import com.devedu.learningplatform.application.port.in.CodeJudgeUseCase;
 import com.devedu.learningplatform.application.port.in.AdminUserManagementUseCase;
-import com.devedu.learningplatform.application.port.out.CourseRepository;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
-import com.devedu.learningplatform.application.port.out.CourseTopicRepository;
-import com.devedu.learningplatform.application.port.out.LessonProgressRepository;
-import com.devedu.learningplatform.application.port.out.LessonRepository;
-import com.devedu.learningplatform.application.port.out.CourseEnrollmentRepository;
-import com.devedu.learningplatform.application.port.out.CourseMaterialRepository;
-import com.devedu.learningplatform.application.port.out.CourseProblemAssignmentRepository;
-import com.devedu.learningplatform.application.port.out.CourseFileStorage;
 import com.devedu.learningplatform.application.port.out.ExamAnswerRepository;
 import com.devedu.learningplatform.application.port.out.ExamAttemptRepository;
 import com.devedu.learningplatform.application.port.out.ExamQuestionRepository;
@@ -34,8 +24,6 @@ import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
 import com.devedu.learningplatform.application.port.out.ProblemRunStatisticsRepository;
 import com.devedu.learningplatform.application.service.AuthenticationService;
 import com.devedu.learningplatform.application.service.CodeExecutionService;
-import com.devedu.learningplatform.application.service.CourseLearningService;
-import com.devedu.learningplatform.application.service.CourseClassroomService;
 import com.devedu.learningplatform.application.service.ExamService;
 import com.devedu.learningplatform.application.service.CodeJudgeService;
 import com.devedu.learningplatform.application.service.ProgrammingProblemsService;
@@ -105,34 +93,6 @@ public class ApplicationConfiguration {
     @Bean
     CodeJudgeUseCase codeJudgeUseCase(SandboxExecutionPort sandboxExecutionPort) {
         return new CodeJudgeService(sandboxExecutionPort);
-    }
-
-    @Bean
-    CourseLearningUseCase courseLearningUseCase(
-            CourseRepository courseRepository,
-            CourseTopicRepository topicRepository,
-            LessonRepository lessonRepository,
-            LessonProgressRepository progressRepository,
-            CourseEnrollmentRepository enrollmentRepository,
-            CourseMaterialRepository materialRepository,
-            CourseFileStorage fileStorage,
-            UserRepository userRepository,
-            Clock clock
-    ) {
-        return new CourseLearningService(courseRepository, topicRepository, lessonRepository, progressRepository,
-                enrollmentRepository, materialRepository, fileStorage, userRepository, clock);
-    }
-
-    @Bean
-    CourseClassroomUseCase courseClassroomUseCase(CourseRepository courseRepository,
-            CourseEnrollmentRepository enrollmentRepository,
-            CourseProblemAssignmentRepository assignmentRepository,
-            ProgrammingProblemRepository problemRepository,
-            ProblemSubmissionRepository submissionRepository,
-            UserRepository userRepository,
-            Clock clock) {
-        return new CourseClassroomService(courseRepository, enrollmentRepository, assignmentRepository,
-                problemRepository, submissionRepository, userRepository, clock);
     }
 
     @Bean

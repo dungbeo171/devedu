@@ -4,6 +4,8 @@ import { HtmlPreview } from '../../../shared/components/HtmlPreview'
 import { executeCode } from '../api/executeCode'
 import type { CodeLanguage } from '../types/codeExecution'
 import { IconChevronDown, IconPlay, IconTerminal } from '../../../shared/components/Icons'
+import { CompilerFiles } from './CompilerFiles'
+import { buildWebPreview, defaultWebScript, defaultWebStyles } from '../webProject'
 
 interface LanguageOption {
   value: CodeLanguage
@@ -54,7 +56,7 @@ print(f"Hello, {name}!")`,
   },
   {
     value: 'HTML',
-    label: 'HTML',
+    label: 'Web',
     extension: 'index.html',
     defaultInput: '',
     sample: `<!doctype html>
@@ -62,9 +64,12 @@ print(f"Hello, {name}!")`,
   <head>
     <meta charset="UTF-8" />
     <title>Hello DevEdu</title>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <h1>Hello, world!</h1>
+    <button type="button">Chào DevEdu</button>
+    <script src="script.js"></script>
   </body>
 </html>`,
   },
@@ -81,22 +86,65 @@ print(f"Hello, {name}!")`,
 
 const initialOutput = 'Nhấn Chạy Code để thực thi chương trình.'
 
+interface CompilerProject {
+  files: Record<string, string>
+  activeFile: string
+}
+
+function initialProjects(): Record<CodeLanguage, CompilerProject> {
+  return Object.fromEntries(languages.map((item) => [item.value, {
+    activeFile: item.extension,
+    files: {
+      [item.extension]: item.sample,
+      ...(item.value === 'HTML' ? { 'style.css': defaultWebStyles, 'script.js': defaultWebScript } : {}),
+    },
+  }])) as Record<CodeLanguage, CompilerProject>
+}
+
 export function CodeCompiler() {
   const [language, setLanguage] = useState<CodeLanguage>('CPP')
-  const [code, setCode] = useState(languages[0].sample)
+  const [projects, setProjects] = useState(initialProjects)
   const [input, setInput] = useState('')
   const [output, setOutput] = useState(initialOutput)
   const [htmlPreview, setHtmlPreview] = useState('')
   const [isRunning, setIsRunning] = useState(false)
+  const [filesCollapsed, setFilesCollapsed] = useState(false)
 
   const selectedLanguage = languages.find((item) => item.value === language) ?? languages[0]
+  const project = projects[language]
+  const code = project.files[selectedLanguage.extension]
+  const hasFiles = language === 'JAVA' || language === 'HTML'
+
+  function selectFile(name: string) {
+    setProjects((current) => ({ ...current, [language]: { ...current[language], activeFile: name } }))
+  }
+
+  function updateFile(projectLanguage: CodeLanguage, name: string, value: string) {
+    setProjects((current) => ({ ...current, [projectLanguage]: {
+      ...current[projectLanguage], files: { ...current[projectLanguage].files, [name]: value },
+    } }))
+  }
+
+  function addJavaFile(name: string) {
+    setProjects((current) => ({ ...current, JAVA: {
+      activeFile: name,
+      files: { ...current.JAVA.files, [name]: `public class ${name.slice(0, -5)} {\n    \n}\n` },
+    } }))
+  }
+
+  function removeJavaFile(name: string) {
+    setProjects((current) => {
+      const files = { ...current.JAVA.files }
+      delete files[name]
+      return { ...current, JAVA: { files, activeFile: current.JAVA.activeFile === name ? 'Main.java' : current.JAVA.activeFile } }
+    })
+  }
 
   function changeLanguage(nextLanguage: CodeLanguage) {
     const nextOption = languages.find((item) => item.value === nextLanguage)
     if (!nextOption) return
 
     setLanguage(nextLanguage)
-    setCode(nextOption.sample)
     setInput('')
     setOutput(initialOutput)
     setHtmlPreview('')
@@ -109,10 +157,16 @@ export function CodeCompiler() {
     setOutput('Đang thực thi chương trình...')
     setHtmlPreview('')
     try {
+      if (Object.values(project.files).reduce((total, content) => total + content.length, 0) > 100_000) {
+        throw new Error('Tổng mã nguồn không được vượt quá 100.000 ký tự.')
+      }
       const effectiveInput = input.trim() ? input : selectedLanguage.defaultInput
-      const result = await executeCode({ language, code, input: effectiveInput })
+      const files = language === 'JAVA'
+        ? Object.fromEntries(Object.entries(project.files).filter(([name]) => name !== 'Main.java'))
+        : undefined
+      const result = await executeCode({ language, code, input: effectiveInput, files })
       setOutput(`[${result.status}]\n${result.output}`)
-      if (language === 'HTML' && result.status === 'SUCCESS') setHtmlPreview(result.output)
+      if (language === 'HTML' && result.status === 'SUCCESS') setHtmlPreview(buildWebPreview(result.output, project.files))
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Đã có lỗi xảy ra khi thực thi.')
       setHtmlPreview('')
@@ -133,6 +187,20 @@ export function CodeCompiler() {
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-[#fafafa] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
+          {hasFiles && (
+            <button
+              type="button"
+              onClick={() => setFilesCollapsed((current) => !current)}
+              aria-expanded={!filesCollapsed}
+              aria-controls="compiler-file-panel"
+              aria-label={filesCollapsed ? 'Mở danh sách file' : 'Thu gọn danh sách file'}
+              title={filesCollapsed ? 'Mở danh sách file' : 'Thu gọn danh sách file'}
+              className="flex min-h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 transition-colors hover:border-blue-300 hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-blue-600"
+            >
+              <IconChevronDown className={`h-3.5 w-3.5 ${filesCollapsed ? '-rotate-90' : 'md:rotate-90'}`} />
+              <span>File</span>
+            </button>
+          )}
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
             <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
@@ -142,7 +210,7 @@ export function CodeCompiler() {
           <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
             <IconTerminal className="h-3.5 w-3.5 text-blue-600" />
             <span className="truncate font-mono text-slate-500">
-              workspace / <span className="font-semibold text-blue-700">{selectedLanguage.extension}</span>
+              workspace / <span className="font-semibold text-blue-700">{project.activeFile}</span>
             </span>
           </div>
         </div>
@@ -154,6 +222,7 @@ export function CodeCompiler() {
             <select
               id="language"
               value={language}
+              disabled={isRunning}
               onChange={(event) => changeLanguage(event.target.value as CodeLanguage)}
               className="min-h-9 appearance-none rounded-md border border-slate-200 bg-white py-1.5 pl-3 pr-8 font-mono text-xs font-semibold text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
             >
@@ -192,8 +261,15 @@ export function CodeCompiler() {
 
       {/* Editor & Terminal Layout */}
       <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1.72fr)_minmax(300px,0.78fr)]">
-        {/* Left: Code Editor Panel */}
-        <div className="flex min-h-[460px] flex-col border-b border-blue-100 lg:border-r lg:border-b-0">
+        {/* Left: Collapsible file explorer and code editor */}
+        <div className={`grid min-w-0 border-b border-blue-100 lg:border-r lg:border-b-0 ${hasFiles && !filesCollapsed ? 'md:grid-cols-[13rem_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]'}`}>
+          {hasFiles && (
+            <div id="compiler-file-panel" className={filesCollapsed ? 'hidden' : 'min-w-0 border-b border-slate-200 bg-white md:border-r md:border-b-0'}>
+              <CompilerFiles key={language} files={project.files} activeFile={project.activeFile} canAdd={language === 'JAVA'} disabled={isRunning}
+                onSelect={selectFile} onAdd={addJavaFile} onRemove={removeJavaFile} />
+            </div>
+          )}
+        <div className="flex min-w-0 min-h-[460px] flex-col">
           <div className="flex items-center justify-between gap-3 border-b border-blue-100 bg-white px-4 py-2 text-xs">
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-bold text-slate-600">Mã nguồn</span>
@@ -202,13 +278,19 @@ export function CodeCompiler() {
               </span>
             </div>
           </div>
-          <SmartCodeEditor key={language} language={language} value={code} onChange={setCode} />
+          {Object.entries(projects).flatMap(([projectLanguage, item]) => Object.entries(item.files).map(([name, value]) => (
+            <div key={`${projectLanguage}:${name}`} className={projectLanguage === language && project.activeFile === name ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}>
+              <SmartCodeEditor editorId={`compiler-${projectLanguage}-${name}`} language={name.endsWith('.css') ? 'CSS' : name.endsWith('.js') ? 'JAVASCRIPT' : projectLanguage as CodeLanguage}
+                value={value} onChange={(next) => updateFile(projectLanguage as CodeLanguage, name, next)} />
+            </div>
+          )))}
+        </div>
         </div>
 
         {/* Right: Standard Input & Terminal Output */}
-        <div className="grid min-h-[400px] grid-rows-2 bg-blue-950 dark-scroll">
+        <div className="flex min-w-0 flex-col bg-blue-950 dark-scroll">
           {/* Input Panel */}
-          <div className="flex min-h-0 flex-col border-b border-blue-800">
+          {language !== 'HTML' && <div className="flex h-48 shrink-0 flex-col border-b border-blue-800">
             <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
               <label className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100" htmlFor="program-input">
                 Input (stdin)
@@ -227,22 +309,22 @@ export function CodeCompiler() {
               spellCheck={false}
               className="min-h-0 flex-1 resize-none bg-blue-950 p-4 font-mono text-xs leading-6 text-white outline-none placeholder:text-blue-300 focus:bg-blue-900"
             />
-          </div>
+          </div>}
 
           {/* Terminal Output Panel */}
-          <div className="flex min-h-0 flex-col bg-blue-950">
+          <div className="flex min-h-0 flex-1 flex-col bg-blue-950">
             <div className="flex items-center justify-between border-b border-blue-800 bg-blue-900 px-4 py-2 text-xs">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400/50" />
                 <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-blue-100">Kết quả</span>
               </div>
             </div>
-            {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} /> : null}
+            {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} allowScripts /> : null}
             <pre
               aria-live="polite"
-              className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-white selection:bg-blue-600/30"
+              className="h-48 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-white selection:bg-blue-600/30"
             >
-              {output}
+              {language === 'HTML' && htmlPreview ? 'Xem trước HTML, CSS và JavaScript ở khung phía trên.' : output}
             </pre>
           </div>
         </div>

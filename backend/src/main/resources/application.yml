@@ -62,8 +62,5 @@ judge:
     mysql-startup-grace-ms: ${JUDGE_MYSQL_STARTUP_GRACE_MS:20000}
     max-concurrent-executions: ${JUDGE_MAX_CONCURRENT_EXECUTIONS:2}
 
-course:
-  material-storage-root: ${COURSE_MATERIAL_STORAGE_ROOT:${java.io.tmpdir}/devedu-course-materials}
-
 server:
   port: ${PORT:${SERVER_PORT:8080}}
