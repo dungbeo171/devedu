@@ -176,6 +176,7 @@ export async function getProgrammingProblemDraft(slug: string): Promise<Programm
   const accessToken = storedAccessToken()
   if (!accessToken) return null
   const response = await fetch(`/api/student/problems/${encodeURIComponent(slug)}/draft`, {
+    signal: AbortSignal.timeout(15000),
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (response.status === 204 || response.status === 401 || response.status === 403) return null
@@ -188,11 +189,13 @@ export async function saveProgrammingProblemDraft(
   language: SubmissionLanguage,
   sourceCode: string,
   input: string,
+  token?: string,
 ): Promise<ProgrammingProblemDraft | null> {
-  const accessToken = storedAccessToken()
+  const accessToken = token ?? storedAccessToken()
   if (!accessToken) return null
   const response = await fetch(`/api/student/problems/${encodeURIComponent(slug)}/draft`, {
     method: 'PUT',
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',

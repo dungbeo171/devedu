@@ -448,6 +448,19 @@ Frontend chạy tại `http://localhost:5173`.
 
 ## Kiểm tra build
 
+### Lưu bản nháp bài tập
+
+Editor bài tập ghi code, ngôn ngữ và input vào IndexedDB ngay khi chỉnh sửa; chỉ sau **đủ 5 giây không chỉnh sửa**, frontend mới gọi API draft Spring Boot để lưu PostgreSQL. Mỗi lần gõ đặt lại hạn gửi; thời gian được kiểm tra lần nữa sau khi chờ IndexedDB/hàng đợi request. Online/focus, chạy test và rời workspace không được bỏ qua hạn này. Rời trang sớm chỉ giữ bản cục bộ để khôi phục lần sau. Bấm Lưu/Nộp bài là thao tác submission chủ động, độc lập với autosave và vẫn ghi dữ liệu theo luồng nộp hiện tại.
+
+- Bản chưa đồng bộ trên máy được ưu tiên khi mở lại bài; bản đã đồng bộ không che bản mới hơn trên server. Khi kết nối trở lại hoặc quay lại cửa sổ, editor thử gửi lại bản đang chờ.
+- Dữ liệu tách theo tài khoản, bài và phiên Contest/Virtual. Khách và Virtual chỉ lưu cục bộ; không tự chuyển draft của khách sang tài khoản sau đăng nhập. Trình biên dịch nhiều file ở trang chính chưa có API draft, không nằm trong thay đổi này.
+- Không lưu token vào IndexedDB. Nếu IndexedDB bị chặn/hết dung lượng hoặc API lỗi, editor hiện cảnh báo thay vì báo lưu thành công.
+- Đây là cơ chế phục hồi bản nháp, không phải toàn bộ website offline. Đóng tab đột ngột không bảo đảm request mạng hoàn tất; bản cục bộ được dùng khi mở lại. Xóa dữ liệu trình duyệt sẽ xóa bản chưa đồng bộ. Nhiều tab/thiết bị chưa có merge xung đột: PostgreSQL vẫn dùng bản ghi cuối cùng được server nhận theo API hiện có.
+
+Test autosave: `node --test frontend/src/features/programming-problems/draftPersistence.test.mjs`.
+
+### Lệnh build
+
 ```powershell
 cd backend
 .\mvnw.cmd clean verify

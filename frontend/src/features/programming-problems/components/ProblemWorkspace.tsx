@@ -23,6 +23,8 @@ import {
   IconSave,
 } from '../../../shared/components/Icons'
 import { createStarterCode } from '../starterCode'
+import { getStoredAccessToken, getStoredUser } from '../../auth/api/authApi'
+import { createDraftSession, indexedDraftStore } from '../draftPersistence'
 
 interface ProblemWorkspaceProps {
   slug: string
@@ -31,6 +33,7 @@ interface ProblemWorkspaceProps {
   draftCache?: Map<string, WorkspaceDraft>
   onDraftChange?: () => void
   isolatedDraft?: boolean
+  draftNamespace?: string
   submissionPolicy?: {
     disabledReason: string
     submit: typeof submitProgrammingProblem
@@ -78,7 +81,7 @@ const languageOptions: LanguageOption[] = [
 const sqlSampleDataStartMarker = '-- DEVEDU_SAMPLE_DATA_BEGIN'
 const sqlSampleDataEndMarker = '-- DEVEDU_SAMPLE_DATA_END'
 
-export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, draftCache, onDraftChange, isolatedDraft = false }: ProblemWorkspaceProps) {
+export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, draftCache, onDraftChange, isolatedDraft = false, draftNamespace = 'problems' }: ProblemWorkspaceProps) {
   const [problem, setProblem] = useState<ProgrammingProblemDetail | null>(null)
   const [language, setLanguage] = useState<SubmissionLanguage>('CPP')
   const [sourceCode, setSourceCode] = useState('')
@@ -95,6 +98,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
   const [draftReady, setDraftReady] = useState(false)
   const [statementCollapsed, setStatementCollapsed] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
+  const draftSessionRef = useRef<ReturnType<typeof createDraftSession> | null>(null)
+  const languageDraftsRef = useRef(new Map<SubmissionLanguage, WorkspaceDraft>())
+  const [draftWarning, setDraftWarning] = useState('')
+  const draftOwner = getStoredUser()?.publicId ?? null
 
   useEffect(() => {
     // Start each result at the top of its own panel, never scroll the page.
@@ -106,12 +113,36 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     setLoading(true)
     setMessage('')
     setDraftReady(false)
+    setDraftWarning('')
+    languageDraftsRef.current.clear()
+    const session = createDraftSession({
+      store: indexedDraftStore(draftOwner === null ? 'guest' : `user:${draftOwner}`, draftNamespace, slug),
+      serverKey: JSON.stringify([draftOwner, slug]),
+      onWarning: warning => { if (!ignore) setDraftWarning(warning) },
+      saveRemote: !isolatedDraft && draftOwner !== null ? async value => {
+        // Do not send the previous account's draft with a newly logged-in user's token.
+        if (getStoredUser()?.publicId !== draftOwner) return false
+        const token = getStoredAccessToken()
+        if (!token) return false
+        return Boolean(await saveProgrammingProblemDraft(slug, value.language, value.sourceCode, value.input, token))
+      } : undefined,
+    })
+    draftSessionRef.current = session
+    const retry = () => session.retry()
+    window.addEventListener('online', retry)
+    window.addEventListener('focus', retry)
 
     void getProgrammingProblem(slug)
       .then(async (result) => {
         if (ignore) return
-        const draft = draftCache?.get(result.slug) ?? (isolatedDraft ? null : await getProgrammingProblemDraft(result.slug).catch(() => null))
+        const draft = await session.restore(async () => {
+          if (isolatedDraft) return draftCache?.get(result.slug) ?? null
+          if (draftOwner === null || getStoredUser()?.publicId !== draftOwner) return null
+          return (await getProgrammingProblemDraft(result.slug)) ?? draftCache?.get(result.slug) ?? null
+        })
+        const languageDrafts = await Promise.all(result.allowedLanguages.map(async item => [item, await session.forLanguage(item)] as const))
         if (ignore) return
+        for (const [item, value] of languageDrafts) if (value) languageDraftsRef.current.set(item, value)
         setProblem(result)
         const allowedOptions = languageOptions.filter((item) => result.allowedLanguages.includes(item.value))
         const preferredLanguage = defaultLanguageForTopic(result.topic)
@@ -122,7 +153,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
           ? draft.language
           : initialLanguage
         setLanguage(restoredLanguage)
-        setSourceCode(restoredSourceCode(result, restoredLanguage, draft?.sourceCode))
+        setSourceCode(restoredSourceCode(result, restoredLanguage, draft?.language === restoredLanguage ? draft.sourceCode : undefined))
         setInput(result.topic === 'SQL' ? '' : (draft?.input ?? result.sampleInput))
         setOutput(result.sampleOutput
           ? `Output mẫu:\n${result.sampleOutput}`
@@ -141,21 +172,28 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
 
     return () => {
       ignore = true
+      session.dispose()
+      if (draftSessionRef.current === session) draftSessionRef.current = null
+      window.removeEventListener('online', retry)
+      window.removeEventListener('focus', retry)
     }
-  }, [slug])
+  }, [slug, draftOwner, draftNamespace, isolatedDraft])
 
   useEffect(() => {
     if (!problem || !draftReady) return
     draftCache?.set(problem.slug, { language, sourceCode, input })
     draftCache?.set(`${problem.slug}:${language}`, { language, sourceCode, input })
     onDraftChange?.()
-    if (isolatedDraft) return
-    const timeoutId = window.setTimeout(() => {
-      void saveProgrammingProblemDraft(problem.slug, language, sourceCode, input)
-        .catch(() => undefined)
-    }, 700)
-    return () => window.clearTimeout(timeoutId)
   }, [problem, language, sourceCode, input, draftReady, draftCache, onDraftChange, isolatedDraft])
+
+  function updateDraft(patch: Partial<WorkspaceDraft>) {
+    const next = { language, sourceCode, input, ...patch }
+    languageDraftsRef.current.set(next.language, next)
+    draftSessionRef.current?.edit(next)
+    setLanguage(next.language)
+    setSourceCode(next.sourceCode)
+    setInput(next.input)
+  }
 
   const selectedLanguage = languageOptions.find((item) => item.value === language) ?? languageOptions[0]
   const allowedLanguageOptions = problem
@@ -166,9 +204,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
   function changeLanguage(nextLanguage: SubmissionLanguage) {
     const option = languageOptions.find((item) => item.value === nextLanguage)
     if (!option) return
-    setLanguage(nextLanguage)
-    setSourceCode((problem && draftCache?.get(`${problem.slug}:${nextLanguage}`)?.sourceCode)
-      ?? (problem ? starterCodeFor(problem, nextLanguage) : createStarterCode(nextLanguage, '')))
+    const restored = languageDraftsRef.current.get(nextLanguage) ?? (problem && draftCache?.get(`${problem.slug}:${nextLanguage}`))
+    updateDraft({ language: nextLanguage,
+      sourceCode: restored?.sourceCode ?? (problem ? starterCodeFor(problem, nextLanguage) : createStarterCode(nextLanguage, '')),
+      input: restored?.input ?? input })
     setOutput(problem?.sampleOutput
       ? `Output mẫu:\n${problem.sampleOutput}`
       : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
@@ -188,7 +227,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     setOutput('Đang chạy toàn bộ test case...')
     setHtmlPreview('')
     try {
-      if (!isolatedDraft) await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
+      await draftSessionRef.current?.persistLocal()
       const result = await runProgrammingProblemTests(problem.slug, language, sourceCode)
       setTestCaseResults(result.testCases)
       setRunStatus(result.status === 'ACCEPTED' ? 'SUCCESS' : result.status)
@@ -237,7 +276,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     setSubmitting(true)
     setMessage('')
     try {
-      if (!isolatedDraft) await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
+      await draftSessionRef.current?.persistLocal()
       const submission = await (submissionPolicy?.submit ?? submitProgrammingProblem)(problem.slug, language, sourceCode)
       if (submission.status === 'ACCEPTED') {
         onAccepted(submission.problemId)
@@ -259,9 +298,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
   }
 
   async function leaveWorkspace() {
-    if (problem && draftReady && !isolatedDraft) {
-      await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
-    }
+    if (problem && draftReady) await draftSessionRef.current?.persistLocal()
     onBack()
   }
 
@@ -307,6 +344,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
         <span>{submissionPolicy ? 'Quay lại Contest' : 'Danh sách bài tập'}</span>
       </button>
       {submissionPolicy?.disabledReason && <p role="status" className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{submissionPolicy.disabledReason}</p>}
+      {draftWarning && <p role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{draftWarning}</p>}
 
       {/* Main Workspace Frame */}
       <div className={`grid isolate overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.48fr)]'}`}>
@@ -480,7 +518,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
                 language={language}
                 value={sourceCode}
                 onChange={(value) => {
-                  setSourceCode(value)
+                  updateDraft({ sourceCode: value })
                   setRunStatus(null)
                   setTestCaseResults([])
                 }}
@@ -499,7 +537,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
                     {problem.sampleInput ? (
                       <button
                         type="button"
-                        onClick={() => setInput(problem.sampleInput)}
+                        onClick={() => updateDraft({ input: problem.sampleInput })}
                         className="font-mono text-[10px] font-semibold text-blue-400 hover:text-blue-300 hover:underline"
                       >
                         Khôi phục mẫu
@@ -519,7 +557,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
                   id="problem-input"
                   value={input}
                   onChange={(event) => {
-                    setInput(event.target.value)
+                    updateDraft({ input: event.target.value })
                   }}
                   placeholder="Có thể để trống nếu bài không cần input"
                   spellCheck={false}

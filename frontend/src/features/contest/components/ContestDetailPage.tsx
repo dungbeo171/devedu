@@ -143,7 +143,7 @@ export function ContestExperience({ contestId, resource, virtualId }: { contestI
         })}
       </nav></aside>
       <div className="min-w-0">
-        {location.problem ? chosen?.available && chosen.slug ? <ProblemWorkspace key={String(userId) + chosen.id} slug={chosen.slug} draftCache={drafts} onDraftChange={persist} isolatedDraft={Boolean(virtualId)}
+        {location.problem ? chosen?.available && chosen.slug ? <ProblemWorkspace key={String(userId) + chosen.id} slug={chosen.slug} draftCache={drafts} onDraftChange={persist} isolatedDraft={Boolean(virtualId)} draftNamespace={`contest:${contestId}:${virtualId ?? 'official'}`}
           onBack={() => navigate(contestId, 'problems')} onAccepted={() => setToast('Accepted · Đã ghi nhận điểm Contest')}
           submissionPolicy={{ disabledReason, submit }} /> : <ContestEmpty title="Problem unavailable" />
           : <div className="overflow-hidden rounded-lg border border-slate-200">{data.problems.map(p => <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 last:border-0">
