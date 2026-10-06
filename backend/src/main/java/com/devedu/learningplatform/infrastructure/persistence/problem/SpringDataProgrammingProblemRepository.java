@@ -13,6 +13,7 @@ import java.util.UUID;
 
 interface SpringDataProgrammingProblemRepository
         extends JpaRepository<ProgrammingProblemJpaEntity, UUID> {
+    List<ProgrammingProblemJpaEntity> findAllByIdInAndDeletedFalse(List<UUID> ids);
 
     @Query("""
             select problem from ProgrammingProblemJpaEntity problem

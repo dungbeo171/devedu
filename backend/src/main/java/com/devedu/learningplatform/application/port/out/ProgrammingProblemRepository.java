@@ -15,6 +15,11 @@ public interface ProgrammingProblemRepository {
 
     Optional<ProgrammingProblem> findBySlug(String slug);
 
+    default List<ProgrammingProblem> findAllByIds(List<java.util.UUID> ids) {
+        var selected = new java.util.HashSet<>(ids);
+        return findAll(null, null, null).stream().filter(p -> selected.contains(p.id())).toList();
+    }
+
     default Optional<ProgrammingProblem> findById(java.util.UUID id) {
         return findAll(null, null, null).stream().filter(problem -> problem.id().equals(id)).findFirst();
     }

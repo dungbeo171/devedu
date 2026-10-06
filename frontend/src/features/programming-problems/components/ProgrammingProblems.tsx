@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { deleteProgrammingProblem, getProgrammingProblems, getSolvedProgrammingProblemIds } from '../api/programmingProblemsApi'
 import { ProblemWorkspace } from './ProblemWorkspace'
 import { getStoredUser } from '../../auth/api/authApi'
@@ -9,7 +9,8 @@ import {
   type ProgrammingProblemSummary,
   type SubmissionLanguage,
 } from '../types/programmingProblem'
-import { IconCheck, IconChevronDown, IconCode, IconFilter, IconSearch, IconSort } from '../../../shared/components/Icons'
+import { IconCheck, IconChevronDown, IconCode, IconFilter, IconSearch } from '../../../shared/components/Icons'
+import { problemListUrl, readProblemListState, type ProblemListState, type ProgressFilter } from '../problemListState'
 
 const topics = Object.entries(topicLabels) as [ProblemTopic, string][]
 const difficultyLabels: Record<ProblemDifficulty, string> = {
@@ -20,8 +21,6 @@ const difficultyLabels: Record<ProblemDifficulty, string> = {
 const languageLabels: Record<SubmissionLanguage, string> = {
   CPP: 'C++', JAVA: 'Java', PYTHON: 'Python', HTML: 'HTML', MYSQL: 'MySQL',
 }
-type ProgressFilter = '' | 'SOLVED' | 'UNSOLVED'
-type SortDirection = 'DEFAULT' | 'ASC' | 'DESC'
 const problemsPerPage = 20
 
 interface ProgrammingProblemsProps {
@@ -29,19 +28,39 @@ interface ProgrammingProblemsProps {
 }
 
 export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
-  const [selectedTopic, setSelectedTopic] = useState<ProblemTopic | null>(null)
-  const [difficulty, setDifficulty] = useState<ProblemDifficulty | ''>('')
-  const [language, setLanguage] = useState<SubmissionLanguage | ''>('')
-  const [progress, setProgress] = useState<ProgressFilter>('')
-  const [search, setSearch] = useState('')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('DEFAULT')
+  const [filters, setFilters] = useState(() => readProblemListState(window.location.search))
+  const { topic: selectedTopic, difficulty, language, progress, search, page } = filters
+  const filterPanelRef = useRef<HTMLDetailsElement>(null)
+  const [closeFilterAfterLoad, setCloseFilterAfterLoad] = useState(false)
+  const [loadedFilterKey, setLoadedFilterKey] = useState('')
+  const filterKey = JSON.stringify([selectedTopic, difficulty, language])
   const [problems, setProblems] = useState<ProgrammingProblemSummary[]>([])
   const [solvedProblemIds, setSolvedProblemIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [flashMessage, setFlashMessage] = useState('')
-  const [page, setPage] = useState(1)
   const currentUser = getStoredUser()
+  const [progressLoading, setProgressLoading] = useState(Boolean(currentUser))
+
+  function changeFilters(patch: Partial<ProblemListState>, closeWhenReady = true) {
+    setFilters(current => ({ ...current, ...patch, page: 1 }))
+    setCloseFilterAfterLoad(closeWhenReady)
+  }
+
+  useEffect(() => {
+    if (!slug) window.history.replaceState(window.history.state, '', problemListUrl(filters))
+  }, [filters, slug])
+
+  useEffect(() => {
+    if (!closeFilterAfterLoad || loading || progressLoading || error || loadedFilterKey !== filterKey) return
+    const panel = filterPanelRef.current
+    if (panel?.open) {
+      const focusWasInside = panel.contains(document.activeElement)
+      panel.open = false
+      if (focusWasInside) panel.querySelector('summary')?.focus({ preventScroll: true })
+    }
+    setCloseFilterAfterLoad(false)
+  }, [closeFilterAfterLoad, loading, progressLoading, error, loadedFilterKey, filterKey, filters])
 
   async function deleteProblem(problem: ProgrammingProblemSummary) {
     if (!window.confirm(`Xóa bài tập “${problem.title}”? Hành động này không thể hoàn tác.`)) return
@@ -69,7 +88,9 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       difficulty: difficulty || undefined,
       language: language || undefined,
     })
-      .then((result) => { if (!ignore) setProblems(result) })
+      .then((result) => {
+        if (!ignore) { setProblems(result); setLoadedFilterKey(filterKey) }
+      })
       .catch((reason: unknown) => {
         if (!ignore) setError(reason instanceof Error ? reason.message : 'Không thể tải bài tập.')
       })
@@ -78,13 +99,18 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   }, [selectedTopic, difficulty, language])
 
   useEffect(() => {
+    let ignore = false
     if (!currentUser) {
       setSolvedProblemIds(new Set())
+      setProgressLoading(false)
       return
     }
+    setProgressLoading(true)
     void getSolvedProgrammingProblemIds()
-      .then((problemIds) => setSolvedProblemIds(new Set(problemIds)))
+      .then((problemIds) => { if (!ignore) setSolvedProblemIds(new Set(problemIds)) })
       .catch(() => undefined)
+      .finally(() => { if (!ignore) setProgressLoading(false) })
+    return () => { ignore = true }
   }, [currentUser?.id, currentUser?.role])
 
   useEffect(() => {
@@ -92,10 +118,6 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
     const timeoutId = window.setTimeout(() => setFlashMessage(''), 3300)
     return () => window.clearTimeout(timeoutId)
   }, [flashMessage])
-
-  useEffect(() => {
-    setPage(1)
-  }, [selectedTopic, difficulty, language, progress, search, sortDirection])
 
   if (slug) return (
     <ProblemWorkspace
@@ -117,11 +139,6 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       if (!keyword) return true
       return `${problem.title} ${problem.summary} ${topicLabels[problem.topic]}`.toLocaleLowerCase('vi').includes(keyword)
     })
-    .sort((left, right) => {
-      if (sortDirection === 'DEFAULT') return 0
-      const comparison = left.title.localeCompare(right.title, 'vi')
-      return sortDirection === 'ASC' ? comparison : -comparison
-    })
   const activeFilterCount = Number(Boolean(search.trim())) + Number(Boolean(difficulty)) + Number(Boolean(language)) + Number(Boolean(progress))
   const totalPages = Math.max(1, Math.ceil(visibleProblems.length / problemsPerPage))
   const currentPage = Math.min(page, totalPages)
@@ -142,14 +159,8 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
 
       <div className="ui-page-header">
         <div>
-          <div className="ui-kicker">
-            <IconCode className="h-3.5 w-3.5" />
-            <span>Kho luyện tập</span>
-          </div>
-          <h1 className="ui-page-title mt-2">Bài tập lập trình</h1>
-          <p className="ui-page-description">
-            Rèn luyện tư duy thuật toán và kỹ năng code qua các bài tập có hệ thống chấm tự động.
-          </p>
+          <h1 className="ui-page-title">Bài tập lập trình</h1>
+
         </div>
         <div className="ui-badge">
           <span className="h-2 w-2 rounded-full bg-blue-500" />
@@ -165,28 +176,19 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
       ) : null}
 
       <div className="mt-5 flex gap-1.5 overflow-x-auto pb-1">
-        <button type="button" onClick={() => setSelectedTopic(null)} className={`${filterButtonClass(selectedTopic === null)} shrink-0`}>Tất cả</button>
+        <button type="button" onClick={() => changeFilters({ topic: null })} className={`${filterButtonClass(selectedTopic === null)} shrink-0`}>Tất cả</button>
         {topics.map(([topic, label]) => (
-          <button key={topic} type="button" onClick={() => setSelectedTopic(topic)} className={`${filterButtonClass(selectedTopic === topic)} shrink-0`}>{label}</button>
+          <button key={topic} type="button" onClick={() => changeFilters({ topic })} className={`${filterButtonClass(selectedTopic === topic)} shrink-0`}>{label}</button>
         ))}
       </div>
 
       <div className="relative z-40 mt-3 flex flex-wrap items-center gap-2 overflow-visible">
-        <button
-          type="button"
-          onClick={() => setSortDirection((current) => current === 'DEFAULT' ? 'ASC' : current === 'ASC' ? 'DESC' : 'DEFAULT')}
-          className={`grid h-9 w-9 place-items-center rounded-full transition ${sortDirection === 'DEFAULT' ? 'bg-slate-100 text-slate-500 hover:bg-slate-200' : 'bg-blue-50 text-blue-600 ring-1 ring-blue-200'}`}
-          aria-label={sortDirection === 'ASC' ? 'Đang sắp xếp A đến Z' : sortDirection === 'DESC' ? 'Đang sắp xếp Z đến A' : 'Sắp xếp bài tập'}
-          title={sortDirection === 'ASC' ? 'A–Z' : sortDirection === 'DESC' ? 'Z–A' : 'Sắp xếp'}
-        >
-          <IconSort className={`h-4 w-4 transition-transform ${sortDirection === 'DESC' ? 'rotate-180' : ''}`} />
-        </button>
-        <details className="group relative open:z-[90]" name="problem-filter-panel">
+        <details ref={filterPanelRef} className="group relative open:z-[90]" name="problem-filter-panel">
           <summary className={`relative grid h-9 w-9 list-none place-items-center rounded-full transition [&::-webkit-details-marker]:hidden ${activeFilterCount ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`} aria-label="Mở bộ lọc">
             <IconFilter className="h-4 w-4" />
             {activeFilterCount ? <span className="absolute right-0 top-0 grid h-4 min-w-4 place-items-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">{activeFilterCount}</span> : null}
           </summary>
-          <div className="absolute left-[-2.75rem] top-[calc(100%+.5rem)] z-[100] max-h-[min(26rem,calc(100vh-8rem))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-[0_18px_45px_-18px_rgba(15,23,42,.35)] sm:left-0">
+          <div className="absolute left-0 top-[calc(100%+.5rem)] z-[100] max-h-[min(26rem,calc(100vh-8rem))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-[0_18px_45px_-18px_rgba(15,23,42,.35)]">
             <label className="block text-xs font-semibold text-slate-600">
               Tìm kiếm bài tập
               <span className="relative mt-1.5 block">
@@ -194,26 +196,28 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
                 <input
                   type="search"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Nhập tên bài tập..."
+                  onChange={(event) => changeFilters({ search: event.target.value }, false)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); setCloseFilterAfterLoad(true) } }}
+                  placeholder="Nhập tên bài tập, nhấn Enter..."
                   className="ui-control ui-control-with-leading-icon pr-3 text-sm font-medium"
                 />
               </span>
             </label>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <ProblemFilterSelect label="Độ khó" value={difficulty} options={[{ value: '', label: 'Tất cả độ khó' }, ...Object.entries(difficultyLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => setDifficulty(value as ProblemDifficulty | '')} />
-              <ProblemFilterSelect label="Ngôn ngữ" value={language} options={[{ value: '', label: 'Tất cả ngôn ngữ' }, ...Object.entries(languageLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => setLanguage(value as SubmissionLanguage | '')} />
-              {currentUser ? <ProblemFilterSelect label="Tiến độ" value={progress} options={[{ value: '', label: 'Tất cả bài tập' }, { value: 'SOLVED', label: 'Đã giải' }, { value: 'UNSOLVED', label: 'Chưa giải' }]} onChange={(value) => setProgress(value as ProgressFilter)} /> : null}
+              <ProblemFilterSelect label="Độ khó" value={difficulty} options={[{ value: '', label: 'Tất cả độ khó' }, ...Object.entries(difficultyLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => changeFilters({ difficulty: value as ProblemDifficulty | '' })} />
+              <ProblemFilterSelect label="Ngôn ngữ" value={language} options={[{ value: '', label: 'Tất cả ngôn ngữ' }, ...Object.entries(languageLabels).map(([value, label]) => ({ value, label }))]} onChange={(value) => changeFilters({ language: value as SubmissionLanguage | '' })} />
+              {currentUser ? <ProblemFilterSelect label="Tiến độ" value={progress} options={[{ value: '', label: 'Tất cả bài tập' }, { value: 'SOLVED', label: 'Đã giải' }, { value: 'UNSOLVED', label: 'Chưa giải' }]} onChange={(value) => changeFilters({ progress: value as ProgressFilter })} /> : null}
             </div>
             {activeFilterCount > 0 ? (
               <button
                 type="button"
-                onClick={() => { setSearch(''); setDifficulty(''); setLanguage(''); setProgress('') }}
+                onClick={() => changeFilters({ search: '', difficulty: '', language: '', progress: '' })}
                 className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-800 hover:underline"
               >
                 Xóa bộ lọc
               </button>
             ) : null}
+            {closeFilterAfterLoad && (loading || progressLoading || loadedFilterKey !== filterKey) ? <p role="status" className="mt-3 text-xs text-slate-500">Đang lọc bài tập…</p> : null}
           </div>
         </details>
         <div className="ml-auto flex items-center gap-2 pl-2 text-xs text-slate-500">
@@ -246,7 +250,7 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
             admin={currentUser?.role === 'ADMIN'}
           />
           {visibleProblems.length > problemsPerPage ? (
-            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+            <Pagination page={currentPage} totalPages={totalPages} onChange={page => setFilters(current => ({ ...current, page }))} />
           ) : null}
         </>
       ) : null}

@@ -6,12 +6,23 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.oauth2.client.CommonOAuth2Provider;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 
 import java.util.ArrayList;
 
 @Configuration
 public class OAuthClientConfiguration {
+
+    @Bean
+    OAuth2AuthorizationRequestResolver authorizationRequestResolver(ClientRegistrationRepository registrations) {
+        var resolver = new DefaultOAuth2AuthorizationRequestResolver(registrations, "/oauth2/authorization");
+        // Both configured providers support this parameter. Keep Spring's state,
+        // nonce, scopes and callback handling; only request an explicit account choice.
+        resolver.setAuthorizationRequestCustomizer(builder -> builder.additionalParameters(
+                parameters -> parameters.put("prompt", "select_account")));
+        return resolver;
+    }
 
     @Bean
     ClientRegistrationRepository clientRegistrationRepository(OAuthClientSettings settings) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SmartCodeEditor } from '../../../shared/components/SmartCodeEditor'
 import { HtmlPreview } from '../../../shared/components/HtmlPreview'
 import {
@@ -28,7 +28,16 @@ interface ProblemWorkspaceProps {
   slug: string
   onBack: () => void
   onAccepted: (problemId: string) => void
+  draftCache?: Map<string, WorkspaceDraft>
+  onDraftChange?: () => void
+  isolatedDraft?: boolean
+  submissionPolicy?: {
+    disabledReason: string
+    submit: typeof submitProgrammingProblem
+  }
 }
+
+export interface WorkspaceDraft { language: SubmissionLanguage; sourceCode: string; input: string }
 
 type RunStatus = 'SUCCESS' | 'WRONG_ANSWER' | 'COMPILE_ERROR' | 'RUNTIME_ERROR' | 'TIME_LIMIT'
 
@@ -69,7 +78,7 @@ const languageOptions: LanguageOption[] = [
 const sqlSampleDataStartMarker = '-- DEVEDU_SAMPLE_DATA_BEGIN'
 const sqlSampleDataEndMarker = '-- DEVEDU_SAMPLE_DATA_END'
 
-export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceProps) {
+export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, draftCache, onDraftChange, isolatedDraft = false }: ProblemWorkspaceProps) {
   const [problem, setProblem] = useState<ProgrammingProblemDetail | null>(null)
   const [language, setLanguage] = useState<SubmissionLanguage>('CPP')
   const [sourceCode, setSourceCode] = useState('')
@@ -85,6 +94,12 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
   const [testCaseResults, setTestCaseResults] = useState<ProblemTestCaseRunResult[]>([])
   const [draftReady, setDraftReady] = useState(false)
   const [statementCollapsed, setStatementCollapsed] = useState(false)
+  const outputRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Start each result at the top of its own panel, never scroll the page.
+    if (outputRef.current) outputRef.current.scrollTop = 0
+  }, [output])
 
   useEffect(() => {
     let ignore = false
@@ -95,7 +110,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     void getProgrammingProblem(slug)
       .then(async (result) => {
         if (ignore) return
-        const draft = await getProgrammingProblemDraft(result.slug).catch(() => null)
+        const draft = draftCache?.get(result.slug) ?? (isolatedDraft ? null : await getProgrammingProblemDraft(result.slug).catch(() => null))
         if (ignore) return
         setProblem(result)
         const allowedOptions = languageOptions.filter((item) => result.allowedLanguages.includes(item.value))
@@ -131,12 +146,16 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
 
   useEffect(() => {
     if (!problem || !draftReady) return
+    draftCache?.set(problem.slug, { language, sourceCode, input })
+    draftCache?.set(`${problem.slug}:${language}`, { language, sourceCode, input })
+    onDraftChange?.()
+    if (isolatedDraft) return
     const timeoutId = window.setTimeout(() => {
       void saveProgrammingProblemDraft(problem.slug, language, sourceCode, input)
         .catch(() => undefined)
     }, 700)
     return () => window.clearTimeout(timeoutId)
-  }, [problem, language, sourceCode, input, draftReady])
+  }, [problem, language, sourceCode, input, draftReady, draftCache, onDraftChange, isolatedDraft])
 
   const selectedLanguage = languageOptions.find((item) => item.value === language) ?? languageOptions[0]
   const allowedLanguageOptions = problem
@@ -148,7 +167,8 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     const option = languageOptions.find((item) => item.value === nextLanguage)
     if (!option) return
     setLanguage(nextLanguage)
-    setSourceCode(problem ? starterCodeFor(problem, nextLanguage) : createStarterCode(nextLanguage, ''))
+    setSourceCode((problem && draftCache?.get(`${problem.slug}:${nextLanguage}`)?.sourceCode)
+      ?? (problem ? starterCodeFor(problem, nextLanguage) : createStarterCode(nextLanguage, '')))
     setOutput(problem?.sampleOutput
       ? `Output mẫu:\n${problem.sampleOutput}`
       : 'Nhấn Chạy test để kiểm tra toàn bộ test case.')
@@ -168,7 +188,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
     setOutput('Đang chạy toàn bộ test case...')
     setHtmlPreview('')
     try {
-      await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
+      if (!isolatedDraft) await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
       const result = await runProgrammingProblemTests(problem.slug, language, sourceCode)
       setTestCaseResults(result.testCases)
       setRunStatus(result.status === 'ACCEPTED' ? 'SUCCESS' : result.status)
@@ -212,12 +232,13 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
 
   async function submit() {
     if (!problem || !sourceCode.trim() || submitting) return
+    if (submissionPolicy?.disabledReason) { setMessage(submissionPolicy.disabledReason); return }
 
     setSubmitting(true)
     setMessage('')
     try {
-      await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
-      const submission = await submitProgrammingProblem(problem.slug, language, sourceCode)
+      if (!isolatedDraft) await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
+      const submission = await (submissionPolicy?.submit ?? submitProgrammingProblem)(problem.slug, language, sourceCode)
       if (submission.status === 'ACCEPTED') {
         onAccepted(submission.problemId)
         return
@@ -238,7 +259,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
   }
 
   async function leaveWorkspace() {
-    if (problem && draftReady) {
+    if (problem && draftReady && !isolatedDraft) {
       await saveProgrammingProblemDraft(problem.slug, language, sourceCode, input).catch(() => null)
     }
     onBack()
@@ -283,8 +304,9 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
         className="ui-button-ghost mb-5 px-0 hover:bg-transparent hover:text-blue-700"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />
-        <span>Danh sách bài tập</span>
+        <span>{submissionPolicy ? 'Quay lại Contest' : 'Danh sách bài tập'}</span>
       </button>
+      {submissionPolicy?.disabledReason && <p role="status" className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{submissionPolicy.disabledReason}</p>}
 
       {/* Main Workspace Frame */}
       <div className={`grid isolate overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.48fr)]'}`}>
@@ -383,7 +405,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                 solution / <span className="font-semibold text-slate-200">{selectedLanguage.fileName}</span>
               </p>
             </div>
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <div className="relative">
                 <label htmlFor="problem-language" className="sr-only">Chọn ngôn ngữ</label>
                 <select
@@ -426,7 +448,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={submitting || running || runningInput || !sourceCode.trim()}
+                disabled={submitting || running || runningInput || !sourceCode.trim() || Boolean(submissionPolicy?.disabledReason)}
               className="ui-button-primary min-h-9 px-3 py-1.5"
               >
                 {submitting ? (
@@ -435,12 +457,12 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span>Đang lưu...</span>
+                    <span>{submissionPolicy ? 'Judging...' : 'Đang lưu...'}</span>
                   </>
                 ) : (
                   <>
                     <IconSave className="h-3.5 w-3.5" />
-                    <span>Lưu bài</span>
+                    <span>{submissionPolicy ? 'Submit' : 'Lưu bài'}</span>
                   </>
                 )}
               </button>
@@ -448,8 +470,10 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
           </div>
 
           {/* Split editor & IO */}
-          <div className="grid h-[610px] min-w-0 flex-1 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
-            <div className="flex min-h-[420px] min-w-0 flex-col border-b border-white/10 lg:border-r lg:border-b-0">
+          <div className={submissionPolicy
+            ? 'grid min-h-0 min-w-0 shrink-0 grid-rows-[500px_440px]'
+            : 'grid min-h-0 min-w-0 shrink-0 grid-rows-[500px_440px] lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)] lg:grid-rows-[610px]'}>
+            <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-white/10 ${submissionPolicy ? '' : 'lg:border-r lg:border-b-0'}`}>
               <SmartCodeEditor
                 key={`${language}-${statementCollapsed ? 'statement-collapsed' : 'statement-open'}`}
                 editorId="problem-code-editor"
@@ -463,11 +487,11 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
               />
             </div>
 
-            <div className={`grid min-h-0 bg-slate-950/90 dark-scroll ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-[minmax(0,1fr)_minmax(0,1fr)]'}`}>
+            <div className={`grid min-h-0 min-w-0 overflow-hidden bg-slate-950/90 dark-scroll [overflow-anchor:none] ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-[150px_minmax(0,1fr)]'}`}>
               {/* Input test case */}
               {!isSqlWorkspace ? (
-              <div className="flex min-h-0 flex-col border-b border-white/10">
-                <div className="flex items-center justify-between gap-2 border-b border-white/5 bg-slate-900/60 px-4 py-2 text-xs">
+              <div className="flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-white/10">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/5 bg-slate-900/60 px-3 py-2 text-xs">
                   <label htmlFor="problem-input" className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Input chạy thử
                   </label>
@@ -499,14 +523,14 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                   }}
                   placeholder="Có thể để trống nếu bài không cần input"
                   spellCheck={false}
-                  className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-xs leading-6 text-slate-300 outline-none placeholder:text-slate-600 focus:bg-slate-950/50"
+                  className="min-h-0 min-w-0 flex-1 resize-none overflow-auto bg-transparent p-3 font-mono text-xs leading-6 text-slate-300 outline-none placeholder:text-slate-600 focus:bg-slate-950/50"
                 />
               </div>
               ) : null}
 
               {/* Output & Judge status */}
-              <div className="flex min-h-0 flex-col overflow-hidden bg-slate-950">
-                <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-slate-900/60 px-4 py-2 text-xs">
+              <div className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-slate-950">
+                <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-slate-900/60 px-3 text-xs">
                   <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-400">Output</span>
                   {runStatus === 'SUCCESS' ? (
                     <span className="flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
@@ -522,7 +546,13 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                     </span>
                   ) : null}
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto">
+                <div ref={outputRef} className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable]">
+                <pre
+                  aria-live="polite"
+                  className="max-h-48 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
+                >
+                  {output}
+                </pre>
                 {testCaseResults.length > 0 ? (
                   <>
                     <div className="flex flex-wrap gap-2 border-b border-white/10 p-3">
@@ -575,12 +605,6 @@ export function ProblemWorkspace({ slug, onBack, onAccepted }: ProblemWorkspaceP
                   </>
                 ) : null}
                 {language === 'HTML' && htmlPreview ? <HtmlPreview source={htmlPreview} /> : null}
-                <pre
-                  aria-live="polite"
-                  className="min-h-[8rem] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-300 selection:bg-blue-600/30"
-                >
-                  {output}
-                </pre>
                 </div>
               </div>
             </div>
@@ -614,7 +638,7 @@ function restoredSourceCode(
   draftSourceCode?: string,
 ): string {
   const starterCode = starterCodeFor(problem, language)
-  if (!draftSourceCode) return starterCode
+  if (draftSourceCode === undefined) return starterCode
   if (language !== 'MYSQL' || draftSourceCode.includes(sqlSampleDataStartMarker)) return draftSourceCode
 
   const sampleStart = starterCode.indexOf(sqlSampleDataStartMarker)

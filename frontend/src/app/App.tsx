@@ -1,6 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CodeCompiler } from '../features/compiler/components/CodeCompiler'
-import { ExamModule } from '../features/exam/components/ExamModule'
+import { ContestListPage } from '../features/contest/components/ContestListPage'
+import { ContestDetailPage } from '../features/contest/components/ContestDetailPage'
+import { ContestResultPage } from '../features/contest/components/ContestResultPage'
+import { VirtualContestPage } from '../features/contest/components/VirtualContestPage'
+import { ContestProfilePage } from '../features/contest/components/ContestProfilePage'
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
 import { AddProgrammingProblemPage } from '../features/programming-problems/components/AddProgrammingProblemPage'
 import { EditProgrammingProblemPage } from '../features/programming-problems/components/EditProgrammingProblemPage'
@@ -31,7 +35,7 @@ interface RouteDefinition {
 const navigationRoutes: RouteDefinition[] = [
   { path: '/', label: 'Trình biên dịch', title: 'Trình biên dịch · DevEdu', content: <CodeCompiler />, icon: IconTerminal },
   { path: '/problems', label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems />, icon: IconCode },
-  { path: '/exams', label: 'Kỳ thi', title: 'Kỳ thi · DevEdu', content: <ExamModule />, icon: IconTrophy },
+  { path: '/contests', label: 'Contests', title: 'Contests · DevEdu', content: <ContestListPage />, icon: IconTrophy },
 ]
 
 const adminRoute: RouteDefinition = {
@@ -60,12 +64,18 @@ export function App() {
   const [flashMessage, setFlashMessage] = useState(takePendingFlash)
   const problemSlug = problemSlugFromPath(pathname)
   const editProblemSlug = editProblemSlugFromPath(pathname)
+  const contestId = pathname.match(/^\/contests\/([^/]+)(?:\/(?:leaderboard|submissions|rules|results|virtual|problems\/[^/]+))?$/)?.[1]
+  const profileRoute = pathname.match(/^\/profile\/(user--?\d+)\/(contests|rating)$/)
   const route = pathname === '/problems/add'
     ? { path: pathname, label: 'Thêm bài tập', title: 'Thêm bài tập · DevEdu', content: <AddProgrammingProblemPage />, icon: IconCode }
     : editProblemSlug
     ? { path: pathname, label: 'Sửa bài tập', title: 'Sửa bài tập · DevEdu', content: <EditProgrammingProblemPage slug={editProblemSlug} />, icon: IconCode }
     : problemSlug
     ? { path: pathname, label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems slug={problemSlug} />, icon: IconCode }
+    : contestId
+    ? { path: pathname, label: 'Contest', title: 'Contest · DevEdu', content: pathname.endsWith('/results') ? <ContestResultPage contestId={contestId} /> : pathname.endsWith('/virtual') ? <VirtualContestPage contestId={contestId} /> : <ContestDetailPage contestId={contestId} />, icon: IconTrophy }
+    : profileRoute
+    ? { path: pathname, label: 'Contest Profile', title: 'Contest Profile · DevEdu', content: <ContestProfilePage handle={profileRoute[1]} view={profileRoute[2] as 'contests' | 'rating'} />, icon: IconTrophy }
     : routes.find((candidate) => candidate.path === pathname)
 
   useEffect(() => {
@@ -79,14 +89,14 @@ export function App() {
   }, [route])
 
   return (
-    <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-hidden bg-white font-sans text-slate-900 antialiased">
+    <div className="flex min-h-screen w-full max-w-full flex-col overflow-x-clip bg-white font-sans text-slate-900 antialiased">
       <FlashToast message={flashMessage} onDismiss={() => setFlashMessage('')} />
       <SiteHeader pathname={pathname} />
       <main className="w-full flex-1 px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
         <div
-          key={pathname}
+          key={contestId ? `contest-${contestId}` : pathname}
           className={`page-enter mx-auto w-full ${
-            pathname === '/' || pathname === '/problems' || pathname.startsWith('/problems/')
+            pathname === '/' || pathname === '/problems' || pathname.startsWith('/problems/') || pathname.startsWith('/contests/')
               ? 'lg:w-[90vw] lg:max-w-[90vw]'
               : 'max-w-[1180px]'
           }`}
@@ -143,7 +153,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
 
         <nav className="hidden min-w-0 flex-1 items-stretch gap-1 lg:flex" aria-label="Điều hướng chính">
           {visibleNavigationRoutes.map((item) => {
-            const active = pathname === item.path || (item.path === '/problems' && pathname.startsWith('/problems/'))
+            const active = pathname === item.path || ((item.path === '/problems' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
             return (
               <a
                 key={item.path}
@@ -180,11 +190,6 @@ function SiteHeader({ pathname }: { pathname: string }) {
                       {user.role}
                     </span>
                   </div>
-                  <p className="mt-1.5 font-mono text-[10px] text-slate-500">
-                    {user.role === 'ADMIN'
-                      ? 'Quản trị viên'
-                      : `ID: ${user.publicId ?? '—'}${user.studentCode ? ` · ${user.studentCode}` : user.teacherCode ? ` · ${user.teacherCode}` : ''}`}
-                  </p>
                 </div>
                 <div className="my-1 h-px bg-slate-100" />
                 <button
@@ -218,7 +223,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
 
       <nav className="flex w-full justify-start gap-1 overflow-x-auto border-t border-slate-100 bg-white px-3 text-xs sm:justify-center lg:hidden" aria-label="Điều hướng chính trên thiết bị di động">
         {visibleNavigationRoutes.map((item) => {
-          const active = pathname === item.path || (item.path === '/problems' && pathname.startsWith('/problems/'))
+          const active = pathname === item.path || ((item.path === '/problems' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
           return (
             <a
               key={item.path}

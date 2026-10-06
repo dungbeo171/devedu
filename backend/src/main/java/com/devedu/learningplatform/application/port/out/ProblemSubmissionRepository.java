@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface ProblemSubmissionRepository {
 
     ProblemSubmission save(ProblemSubmission submission);
+    default java.util.Optional<ProblemSubmission> findById(UUID id) { return java.util.Optional.empty(); }
 
     Set<UUID> findAcceptedProblemIdsByStudentId(UUID studentId);
 

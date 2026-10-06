@@ -63,6 +63,22 @@ class AuthorizationRulesTest {
     }
 
     @Test
+    void contestCatalogIsPublicButParticipationAndCreationAreProtected() throws Exception {
+        mockMvc.perform(get("/api/contests")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/contests/demo")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/contests/demo/private")).andExpect(status().isUnauthorized());
+        for (var path : java.util.List.of("/api/contests/demo/registration", "/api/contests/demo/problems/example/submissions")) {
+            mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
+            for (var token : java.util.List.of("student-token", "teacher-token", "admin-token")) {
+                mockMvc.perform(post(path).header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+            }
+        }
+        mockMvc.perform(post("/api/teacher/contests").header("Authorization", "Bearer student-token")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/teacher/contests").header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/teacher/contests").header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
+    }
+
+    @Test
     void requiresAuthenticationForOtherEndpoints() throws Exception {
         mockMvc.perform(get("/api/student/test"))
                 .andExpect(status().isUnauthorized())
@@ -147,22 +163,6 @@ class AuthorizationRulesTest {
     }
 
     @Test
-    void allAuthenticatedRolesCanAccessExamParticipationEndpoints() throws Exception {
-        mockMvc.perform(get("/api/exams")).andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer student-token")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/exams").header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
-    }
-
-    @Test
-    void teachersAndAdminsCanManageExams() throws Exception {
-        mockMvc.perform(post("/api/teacher/exams")).andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/api/teacher/exams").header("Authorization", "Bearer student-token")).andExpect(status().isForbidden());
-        mockMvc.perform(post("/api/teacher/exams").header("Authorization", "Bearer teacher-token")).andExpect(status().isOk());
-        mockMvc.perform(post("/api/teacher/exams").header("Authorization", "Bearer admin-token")).andExpect(status().isOk());
-    }
-
-    @Test
     void teachersAndAdminsCanCreateProgrammingProblems() throws Exception {
         var path = "/api/teacher/problems";
         mockMvc.perform(post(path)).andExpect(status().isUnauthorized());
@@ -177,6 +177,12 @@ class AuthorizationRulesTest {
 
     @RestController
     public static class TestController {
+
+        @GetMapping({"/api/contests", "/api/contests/demo"})
+        public ResponseEntity<Void> contests() { return ResponseEntity.ok().build(); }
+
+        @PostMapping({"/api/contests/demo/registration", "/api/contests/demo/problems/example/submissions", "/api/teacher/contests"})
+        public ResponseEntity<Void> contestActions() { return ResponseEntity.ok().build(); }
 
         @PostMapping("/api/auth/login")
         public ResponseEntity<Void> login() {
@@ -197,12 +203,6 @@ class AuthorizationRulesTest {
         public ResponseEntity<Void> problemDetail() {
             return ResponseEntity.ok().build();
         }
-
-        @GetMapping("/api/exams")
-        public ResponseEntity<Void> exams() { return ResponseEntity.ok().build(); }
-
-        @PostMapping("/api/teacher/exams")
-        public ResponseEntity<Void> manageExams() { return ResponseEntity.ok().build(); }
 
         @PostMapping("/api/teacher/problems")
         public ResponseEntity<Void> createProblem() { return ResponseEntity.ok().build(); }

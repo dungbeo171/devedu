@@ -4,15 +4,10 @@ import com.devedu.learningplatform.application.port.in.GetSystemStatusUseCase;
 import com.devedu.learningplatform.application.port.in.ProgrammingProblemsUseCase;
 import com.devedu.learningplatform.application.port.in.AuthenticationUseCase;
 import com.devedu.learningplatform.application.port.in.ExecuteCodeUseCase;
-import com.devedu.learningplatform.application.port.in.ExamUseCase;
 import com.devedu.learningplatform.application.port.in.ListExternalAuthProvidersUseCase;
 import com.devedu.learningplatform.application.port.in.CodeJudgeUseCase;
 import com.devedu.learningplatform.application.port.in.AdminUserManagementUseCase;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
-import com.devedu.learningplatform.application.port.out.ExamAnswerRepository;
-import com.devedu.learningplatform.application.port.out.ExamAttemptRepository;
-import com.devedu.learningplatform.application.port.out.ExamQuestionRepository;
-import com.devedu.learningplatform.application.port.out.ExamRepository;
 import com.devedu.learningplatform.application.port.out.ProblemTestCaseRepository;
 import com.devedu.learningplatform.application.port.out.SandboxExecutionPort;
 import com.devedu.learningplatform.application.port.out.PasswordHasher;
@@ -24,7 +19,6 @@ import com.devedu.learningplatform.application.port.out.ProblemDraftRepository;
 import com.devedu.learningplatform.application.port.out.ProblemRunStatisticsRepository;
 import com.devedu.learningplatform.application.service.AuthenticationService;
 import com.devedu.learningplatform.application.service.CodeExecutionService;
-import com.devedu.learningplatform.application.service.ExamService;
 import com.devedu.learningplatform.application.service.CodeJudgeService;
 import com.devedu.learningplatform.application.service.ProgrammingProblemsService;
 import com.devedu.learningplatform.application.service.SystemStatusService;
@@ -96,9 +90,10 @@ public class ApplicationConfiguration {
     }
 
     @Bean
-    ExamUseCase examUseCase(ExamRepository examRepository, ExamQuestionRepository questionRepository,
-                            ExamAttemptRepository attemptRepository, ExamAnswerRepository answerRepository,
-                            Clock clock) {
-        return new ExamService(examRepository, questionRepository, attemptRepository, answerRepository, clock);
+    com.devedu.learningplatform.application.contest.ContestUseCase contestUseCase(
+            com.devedu.learningplatform.application.contest.ContestRepository repository,
+            ProgrammingProblemRepository problems,
+            com.devedu.learningplatform.application.contest.ContestSubmissionPort submissions, Clock clock) {
+        return new com.devedu.learningplatform.application.contest.ContestService(repository, problems, submissions, clock);
     }
 }

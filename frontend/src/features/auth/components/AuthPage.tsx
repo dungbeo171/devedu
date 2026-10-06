@@ -65,9 +65,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <h1 className="mt-12 max-w-md text-3xl font-bold leading-tight text-white">
               Học, viết code và nâng cao trình độ mỗi ngày.
             </h1>
-            <p className="mt-4 text-sm leading-7 text-blue-50">
-              Nền tảng học lập trình toàn diện: từ biên dịch đa ngôn ngữ, luyện thuật toán đến kỳ thi.
-            </p>
 
             <div className="mt-8 space-y-3.5 text-sm text-blue-50">
               <div className="flex items-center gap-3">
@@ -80,7 +77,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               </div>
               <div className="flex items-center gap-3">
                 <IconCheckCircle className="h-4 w-4 shrink-0 text-white" />
-                <span>Tham gia kỳ thi trực tuyến</span>
+                <span>Tham gia Contest lập trình</span>
               </div>
             </div>
           </div>
@@ -91,8 +88,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
 
         <div className="p-6 sm:p-10">
-          <p className="ui-kicker">{mode === 'login' ? 'Chào mừng trở lại' : 'Tài khoản sinh viên'}</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-950">
             {mode === 'login' ? 'Đăng nhập DevEdu' : 'Tạo tài khoản mới'}
           </h2>
 

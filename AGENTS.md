@@ -52,6 +52,7 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - JWT dùng HMAC-SHA256, stateless, secret từ `JWT_SECRET`; không commit secret cố định.
 - JWT phải xác minh chữ ký constant-time, `alg`, `typ`, `iat`, `exp` và các claim định danh; response register/login phải có `Cache-Control: no-store`.
 - Đăng nhập Google và GitHub dùng Spring Security OAuth2 Client. Client ID/Secret chỉ lấy từ biến môi trường; provider chưa cấu hình phải được báo disabled qua API, không dùng credential giả.
+- Mỗi lần bắt đầu OAuth Google/GitHub, authorization request phải có `prompt=select_account` để nhà cung cấp hiển thị chọn tài khoản. Dùng customizer của resolver Spring; không tự ghép URL hoặc thay đổi `state`, nonce, scope và callback.
 - OAuth callback chỉ chấp nhận email đã được provider xác thực theo contract của từng provider. GitHub phải lấy email verified qua API `user:email`; Google yêu cầu claim `email_verified`.
 - OAuth login tìm tài khoản theo email chuẩn hóa, tái sử dụng tài khoản email hiện có hoặc tạo `STUDENT` mới với password hash ngẫu nhiên không dùng để đăng nhập. Sau OAuth, backend phát JWT DevEdu và xóa session handshake; API tiếp tục xác thực stateless bằng Bearer JWT.
 - OAuth token chuyển về `/auth/callback` qua URL fragment, frontend phải lưu token rồi xóa fragment ngay bằng `history.replaceState`. Không đưa Client Secret hoặc access token của provider xuống frontend.
@@ -112,22 +113,28 @@ Khi thêm một module nghiệp vụ, giữ ranh giới module rõ ràng và áp
 - Trang `/problems` hiển thị các topic dạng bộ lọc tên ngắn ở trên, bộ lọc difficulty/language/tiến độ và danh sách bài một hàng ở dưới, phân trang cố định 20 bài mỗi trang; chọn bài mới mở workspace. Workspace ưu tiên bản nháp của sinh viên, nếu chưa có thì dùng starter code riêng của bài/ngôn ngữ. Tài khoản `TEACHER`/`ADMIN` mở trang riêng `/problems/add` để thêm bài tập, starter code và test case ẩn. Chỉ `ADMIN` thấy thao tác sửa/xóa; sửa dùng `/problems/{slug}/edit`, xóa cập nhật danh sách ngay không reload.
 - Slug bài tập dùng tiếng Việt không dấu, phân tách bằng dấu gạch ngang để URL ngắn và dễ đọc.
 - Topic hiển thị thành hàng lọc riêng phía trên thanh search/sort/filter. Danh sách hiển thị mỗi bài trên một hàng gọn cùng acceptance rate từ lượt chạy thử; bài đã giải có dấu tích lấy từ tiến độ `ACCEPTED` đã lưu và đồng bộ lại ngay sau Submit. Chạy thử `SUCCESS` hiển thị trạng thái và dấu tích màu xanh nhưng không được tính là đã giải.
+- Danh sách không có nút sắp xếp A–Z/Z–A. Bộ lọc và phân trang lưu vào query URL `/problems` để khôi phục khi quay lại từ workspace hoặc tải lại trang; đổi bộ lọc mới đặt trang về 1. Menu lọc tự đóng sau khi dữ liệu của lựa chọn mới tải thành công, giữ mở khi lỗi; tìm kiếm giữ mở khi gõ và đóng khi nhấn Enter.
 
 ### Module đã gỡ bỏ
 
+- Module Exam, route `/exams` và API liên quan đã gỡ bỏ. Không tái tạo bảng Exam; giữ nguyên dữ liệu cũ trong database, không tự động DROP bảng.
 - Module Lớp học (Course/Lesson), route `/courses` và các API liên quan đã được gỡ bỏ. Không khôi phục khi chưa có yêu cầu của người dùng.
 - Không tự động xóa bảng dữ liệu lớp học hoặc volume tài liệu cũ. Schema mới không tạo bảng lớp học; dữ liệu cũ được giữ lại để có thể khôi phục thủ công.
 
-### Exam
+### Contest
 
-- Domain gồm `Exam`, `ExamQuestion`, `ExamAttempt`, `ExamAnswer` và các enum trạng thái/loại câu hỏi.
-- `ExamUseCase` điều phối tạo đề, bắt đầu lượt thi, lưu đáp án, nộp bài và đọc kết quả; persistence nằm trong `infrastructure/persistence/exam`.
-- `/api/teacher/exams/**` dành cho `TEACHER`/`ADMIN`; giáo viên chỉ quản lý và xem kết quả kỳ thi của mình, admin có thể quản lý tất cả.
-- `/api/exams/**` dành cho mọi tài khoản đã xác thực (`STUDENT`, `TEACHER`, `ADMIN`). Mỗi tài khoản có tối đa một attempt cho mỗi kỳ thi; quyền tham gia không làm thay đổi quyền quản lý riêng của giáo viên/admin.
-- Đề chỉ được bắt đầu từ `scheduledAt`; hạn làm bài của attempt được tính bằng `durationMinutes` kể từ lúc bắt đầu.
-- Không trả đáp án đúng qua API sinh viên. Không cho thay đổi bộ câu hỏi sau khi đã có attempt.
-- Multiple Choice được chấm tự động. Coding chỉ lưu source code và luôn được báo chờ chấm; không giả lập judge hoặc điểm coding.
-- Frontend code của module nằm trong `src/features/exam`.
+- Contest là module trong cùng modular monolith: `domain/contest`, `application/contest`, `infrastructure/persistence/contest`, `presentation/rest/contest`; không tạo hệ thống Problem/Judge mới.
+- Contest lưu tên, loại, thời gian UTC, thời lượng, rules và danh sách tham chiếu Problem theo thứ tự A–Z cùng điểm. Chỉ `TEACHER`/`ADMIN` tạo; từ 1 đến 26 Problem đang tồn tại, không trùng, 1–10000 điểm/bài. Chưa hỗ trợ sửa/xóa Contest hoặc rating.
+- Catalog/detail là public tại `GET /api/contests`, `GET /api/contests/{id}`. Detail không trả email, UUID user nội bộ, source hay lịch sử nộp của người khác; response có thông tin cá nhân phải `Cache-Control: no-store`.
+- Đăng ký idempotent theo `(contest,user)`; cả ba role có thể tham gia. Server chỉ nhận nộp trong `[startsAt, endsAt)`, yêu cầu đăng ký và Problem thuộc Contest. Timestamp ghi nhận trước Judge; lượt hợp lệ trước hạn vẫn được chấm khi Judge hoàn tất sau hạn.
+- `ContestSubmissionPort` tái sử dụng `ProgrammingProblemsUseCase.submit`; adapter infrastructure đặt transaction cho submission/draft hiện có và liên kết Contest. Nộp thường hoặc chạy thử không được cộng điểm Contest. Không copy source hoặc test case vào bảng Contest.
+- Leaderboard tính mỗi bài Accepted một lần; sắp xếp tổng điểm giảm dần, thời gian nhận lượt Accepted đầu tiên của bài giải cuối cùng tăng dần, sau đó public user ID. Tiến độ Problem thông thường vẫn được lưu như hiện tại.
+- Frontend nằm trong `src/features/contest`, route `/contests` và `/contests/{id}`. Dùng lại `ProblemWorkspace` với `submissionPolicy` tùy chọn để nộp vào API Contest; không sửa luồng `/problems` mặc định. Countdown dùng thời gian server + đồng hồ đơn điệu phía client, cập nhật mỗi giây; server là nguồn quyết định hạn nộp.
+- Không tự động seed Contest khi khởi động. Khi người dùng yêu cầu dữ liệu mẫu, có thể chạy thủ công `scripts/add-sample-contests.sql`: tham chiếu Problem sẵn có, dùng admin hiện có, không tạo người tham gia/kết quả/rating giả và không đổi lịch Contest đã tồn tại khi chạy lại. Các Problem được tham chiếu vẫn là bài công khai, không cam kết đề thi bí mật hoặc chống gian lận. Không tự ý thêm rating, queue hoặc microservice.
+- Workspace dùng `/contests/{id}/problems/{problemId}`, bảng xếp hạng `/contests/{id}/leaderboard`, cùng các tab `/submissions` và `/rules`. History API giữ cùng instance Contest khi chuyển bài/tab; cache bản nháp theo problem/language chỉ dùng trong phiên Contest của tài khoản hiện tại, bên cạnh autosave Problem hiện có.
+- `application/contest/scoring/ContestScoring` tính bảng điểm và công bố `scoringRules` trong detail. Quy tắc hiện tại không phạt lượt sai; trả số lượt sai trước Accepted đầu tiên, tổng attempts và điểm từng bài. Không cộng điểm lần nữa khi resubmit Accepted.
+- Frontend cập nhật detail mỗi 5 giây qua `subscribeContestUpdates`, tạm ngừng khi tab ẩn và tránh request poll chồng nhau. Giữ ranh giới transport để thay polling sau này; không thêm WebSocket/SSE dependency khi chưa cần.
+- Không giả số liệu bộ nhớ hoặc verdict Memory Limit: Judge hiện chỉ trả runtime và các verdict đang có. Runtime giữ nguyên định nghĩa của Judge. Backend quyết định deadline ngay cả khi UI đang chấm hoặc đồng hồ client sai.
 
 ## Kiến trúc frontend
 
@@ -146,7 +153,7 @@ Không gom toàn bộ component, hook hoặc service của nhiều feature vào 
 
 Compiler và Programming Problems dùng chung `src/shared/components/SmartCodeEditor.tsx`. Editor giữ history phía client cho undo/redo, hỗ trợ thao tác bàn phím, autocomplete tĩnh/biến đã khai báo và syntax highlighting theo ngôn ngữ cho type, keyword, string, number, function và comment; không thêm editor dependency khi các hành vi hiện tại vẫn đáp ứng yêu cầu. Input của Compiler là tùy chọn và có giá trị mẫu do frontend cung cấp khi để trống. Programming Problems có thao tác chạy input tùy chỉnh riêng; nút chạy test chấm toàn bộ test case ẩn và hiển thị đạt/trượt từng case. Input khi Submit luôn lấy từ test case ẩn của backend.
 
-Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/exams`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
+Các module frontend là các trang độc lập: `/` mở trực tiếp Compiler; các trang còn lại là `/problems`, `/problems/{slug}`, `/contests`, `/contests/{id}`. `src/app/App.tsx` chỉ chịu trách nhiệm page composition, navigation và chọn page theo URL; không đưa logic nghiệp vụ của feature vào app shell. Không thêm router dependency khi các route hiện tại vẫn được xử lý rõ ràng bằng browser pathname và History API.
 
 Authentication frontend nằm trong `src/features/auth`, gồm `/login`, `/register` và `/auth/callback`. Header chỉ đọc trạng thái đăng nhập tối thiểu để hiển thị avatar, tên và menu logout; không hiển thị email trên navbar. Request và lưu/xóa token thuộc feature auth.
 
@@ -175,7 +182,6 @@ Quản trị user frontend nằm trong `src/features/admin-users` tại `/admin/
 - Không over-engineering: không thêm abstraction, generic framework, event bus, CQRS, DDD pattern hay infrastructure khi chưa có yêu cầu thực tế.
 - Không sửa file hoặc module ngoài phạm vi task.
 - Không mở rộng authentication hoặc triển khai compiler, exam hay AI nếu task không yêu cầu rõ ràng.
-- Với Exam, không tự ý thêm proctoring/chống gian lận, webcam, browser lockdown, code judge hoặc chấm điểm coding giả.
 - Với Compiler code execution, luôn đi qua `CodeExecutionPort` và Docker sandbox; không chạy source trong JVM/Spring Boot hoặc nối Compiler vào logic chấm test case của Programming Problems.
 - Không nới lỏng giới hạn sandbox, đưa source/input vào shell command hoặc cho sandbox truy cập network/host filesystem.
 - Tôn trọng thay đổi đang có của người dùng; không xóa hoặc ghi đè thay đổi không liên quan.

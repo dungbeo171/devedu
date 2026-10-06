@@ -4,10 +4,6 @@ import com.devedu.learningplatform.application.exception.EmailAlreadyExistsExcep
 import com.devedu.learningplatform.application.exception.InvalidCredentialsException;
 import com.devedu.learningplatform.application.exception.ProgrammingProblemNotFoundException;
 import com.devedu.learningplatform.application.exception.ProgrammingProblemSlugAlreadyExistsException;
-import com.devedu.learningplatform.application.exception.ExamForbiddenException;
-import com.devedu.learningplatform.application.exception.ExamResourceNotFoundException;
-import com.devedu.learningplatform.application.exception.ExamSlugAlreadyExistsException;
-import com.devedu.learningplatform.application.exception.ExamStateException;
 import com.devedu.learningplatform.application.exception.JudgeUnavailableException;
 import com.devedu.learningplatform.application.exception.UserManagementForbiddenException;
 import com.devedu.learningplatform.application.exception.UserNotFoundException;
@@ -25,6 +21,16 @@ import java.time.Instant;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(com.devedu.learningplatform.application.contest.ContestException.class)
+    ResponseEntity<ApiErrorResponse> handleContest(com.devedu.learningplatform.application.contest.ContestException exception, HttpServletRequest request) {
+        var status = switch (exception.kind()) {
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case CONFLICT -> HttpStatus.CONFLICT;
+        };
+        return error(status, exception.getMessage(), request);
+    }
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     ResponseEntity<ApiErrorResponse> handleDuplicateEmail(
@@ -56,21 +62,6 @@ public class ApiExceptionHandler {
             HttpServletRequest request
     ) {
         return error(HttpStatus.CONFLICT, exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(ExamResourceNotFoundException.class)
-    ResponseEntity<ApiErrorResponse> handleExamResourceNotFound(ExamResourceNotFoundException exception,HttpServletRequest request) {
-        return error(HttpStatus.NOT_FOUND, exception.getMessage(), request);
-    }
-
-    @ExceptionHandler({ExamSlugAlreadyExistsException.class, ExamStateException.class})
-    ResponseEntity<ApiErrorResponse> handleExamConflict(RuntimeException exception,HttpServletRequest request) {
-        return error(HttpStatus.CONFLICT, exception.getMessage(), request);
-    }
-
-    @ExceptionHandler(ExamForbiddenException.class)
-    ResponseEntity<ApiErrorResponse> handleExamForbidden(ExamForbiddenException exception,HttpServletRequest request) {
-        return error(HttpStatus.FORBIDDEN, exception.getMessage(), request);
     }
 
     @ExceptionHandler(JudgeUnavailableException.class)

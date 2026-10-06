@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../../auth/types/auth'
 import { deleteManagedUser, getManagedUsers, updateManagedUser, updateManagedUserRole } from '../api/adminUsersApi'
 import type { ManagedUser } from '../types/adminUser'
-import { IconFilter, IconSearch, IconShield } from '../../../shared/components/Icons'
+import { IconFilter, IconSearch } from '../../../shared/components/Icons'
 import { ModalDialog } from '../../../shared/components/ModalDialog'
 
 const roles: UserRole[] = ['STUDENT', 'TEACHER', 'ADMIN']
@@ -118,9 +118,8 @@ export function AdminUsersPage() {
     <section>
       <div className="ui-page-header">
         <div>
-          <div className="ui-kicker"><IconShield className="h-3.5 w-3.5" /><span>Quản trị hệ thống</span></div>
-          <h1 className="ui-page-title mt-2">Quản lý người dùng</h1>
-          <p className="ui-page-description">Tìm, sửa thông tin, cấp quyền và xóa tài khoản Giáo viên hoặc Sinh viên.</p>
+          <h1 className="ui-page-title">Quản lý người dùng</h1>
+
         </div>
         <div className="ui-badge"><span className="h-2 w-2 rounded-full bg-blue-500" /><span>{loading ? 'Đang tải...' : `${users.length} tài khoản`}</span></div>
       </div>
@@ -154,7 +153,7 @@ export function AdminUsersPage() {
                   const isUpdating = updatingId === user.id
                   const isDeleting = deletingId === user.id
                   return <tr key={user.id} className="border-t border-slate-100 transition hover:bg-blue-50/45">
-                    <td className="px-6 py-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-blue-600 font-mono text-sm font-bold text-white shadow-sm">{user.name.charAt(0).toLocaleUpperCase('vi')}</span><div><div className="flex items-center gap-2"><span className="font-bold text-slate-950">{user.name}</span>{isCurrentAdmin ? <span className="rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">Bạn</span> : null}</div><span className="font-mono text-[11px] text-slate-500">{user.role === 'ADMIN' ? 'Tài khoản quản trị' : `ID: ${user.publicId}${user.studentCode ? ` · ${user.studentCode}` : user.teacherCode ? ` · ${user.teacherCode}` : ''}`}</span></div></div></td>
+                    <td className="px-6 py-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-blue-600 font-mono text-sm font-bold text-white shadow-sm">{user.name.charAt(0).toLocaleUpperCase('vi')}</span><div className="flex items-center gap-2"><span className="font-bold text-slate-950">{user.name}</span>{isCurrentAdmin ? <span className="rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">Bạn</span> : null}</div></div></td>
                     <td className="px-6 py-4 font-mono text-xs text-slate-600">{user.email}</td>
                     <td className="px-6 py-4 text-xs font-medium text-slate-400">{new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td className="px-6 py-4"><div className="flex items-center gap-2"><select aria-label={`Role của ${user.name}`} value={user.role} disabled={isCurrentAdmin || isUpdating || isDeleting} onChange={(event) => void changeRole(user, event.target.value as UserRole)} className={`rounded-xl border px-3 py-1.5 font-mono text-xs font-bold outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${user.role === 'ADMIN' ? 'border-red-200 bg-red-50 text-red-700 focus:border-red-500' : user.role === 'TEACHER' ? 'border-blue-200 bg-blue-50 text-blue-800 focus:border-blue-500' : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500'}`}>

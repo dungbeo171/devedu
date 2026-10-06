@@ -37,6 +37,10 @@ public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepo
         return toDomain(repository.saveAndFlush(entity));
     }
 
+    @Override public java.util.Optional<ProblemSubmission> findById(UUID id) {
+        return repository.findById(id).map(this::toDomain);
+    }
+
     @Override
     public Set<UUID> findAcceptedProblemIdsByStudentId(UUID studentId) {
         return new LinkedHashSet<>(repository.findAcceptedProblemIdsByStudentId(studentId));

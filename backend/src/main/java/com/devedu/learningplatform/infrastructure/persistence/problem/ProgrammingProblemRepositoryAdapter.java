@@ -45,6 +45,11 @@ public class ProgrammingProblemRepositoryAdapter implements ProgrammingProblemRe
     }
 
     @Override
+    public List<ProgrammingProblem> findAllByIds(List<java.util.UUID> ids) {
+        return repository.findAllByIdInAndDeletedFalse(ids).stream().map(this::toDomain).toList();
+    }
+
+    @Override
     public Optional<ProgrammingProblem> findById(java.util.UUID id) {
         return repository.findByIdAndDeletedFalse(id).map(this::toDomain);
     }

@@ -90,7 +90,7 @@ Các trang frontend:
 
 - `/` — Code Compiler
 - `/problems` — Programming Problems
-- `/exams` — Exam
+- `/contests` — danh sách Contest; `/contests/{id}` — chi tiết và workspace Contest
 
 Đổi cổng host bằng `FRONTEND_PORT`, `BACKEND_PORT` hoặc `POSTGRES_PORT`. Dừng stack bằng `docker compose down`. `docker compose down -v` còn xóa toàn bộ database và workspace volume, vì vậy chỉ dùng khi chủ động muốn xóa dữ liệu local.
 
@@ -142,6 +142,8 @@ Biến môi trường có thể cấu hình: `DB_URL`, `DB_USERNAME`, `DB_PASSWO
 
 Frontend cung cấp `/login` và `/register` bằng tên, email và password, đồng thời hỗ trợ Google và GitHub OAuth. Provider chỉ được bật khi cả Client ID và Client Secret tương ứng có trong `.env`; xem trạng thái public tại `GET /api/auth/oauth/providers`.
 
+Google và GitHub luôn được gửi `prompt=select_account` khi bắt đầu đăng nhập để hiển thị bước chọn tài khoản, kể cả khi trình duyệt đã có phiên đăng nhập tại nhà cung cấp. Không cần đổi Client ID, Client Secret hoặc callback URL.
+
 Đăng ký OAuth app với các redirect URI local sau:
 
 ```text
@@ -188,7 +190,7 @@ Quy tắc quyền:
 
 - `/api/auth/register`, `/api/auth/login`, `/api/system/status`: public.
 - `GET /api/problems` và `GET /api/problems/{slug}`: public.
-- Submit bài và tham gia Exam: `STUDENT`, `TEACHER`, `ADMIN`; dữ liệu học tập luôn gắn với chính tài khoản thực hiện.
+- Submit bài và tham gia Contest: `STUDENT`, `TEACHER`, `ADMIN`; dữ liệu học tập luôn gắn với chính tài khoản thực hiện.
 - `/api/teacher/**`: `TEACHER` hoặc `ADMIN`.
 - `/api/admin/**`: chỉ `ADMIN`.
 
@@ -228,9 +230,9 @@ Frontend hiện đọc token từ local storage để phục vụ các feature �
 
 ## Database và hiệu năng
 
-Schema PostgreSQL đặt constraint cho role/status, khóa ngoại, uniqueness và các giới hạn nghiệp vụ chính. Các index phục vụ list/filter/order hiện tại được tạo idempotent trong `schema.sql`, gồm catalog, topic/difficulty, exam/attempt/answer và submission history.
+Schema PostgreSQL đặt constraint cho role/status, khóa ngoại, uniqueness và các giới hạn nghiệp vụ chính. Các index phục vụ list/filter/order hiện tại được tạo idempotent trong `schema.sql`, gồm catalog, topic/difficulty, Contest và submission history.
 
-Adapter Exam tải options theo batch khi đọc danh sách câu hỏi để tránh N+1 query; danh sách exam do giáo viên quản lý được lọc ngay tại repository. Các API list hiện trả toàn bộ dữ liệu vì dataset foundation nhỏ. Khi dữ liệu thực tế tăng, thêm pagination vào contract theo từng module thay vì thêm cache hoặc abstraction chung trước nhu cầu.
+Các API list hiện trả toàn bộ dữ liệu vì dataset foundation nhỏ. Khi dữ liệu thực tế tăng, thêm pagination vào contract theo từng module thay vì thêm cache hoặc abstraction chung trước nhu cầu.
 
 `spring.sql.init.mode=always` và `schema.sql` phù hợp cho local/foundation hiện tại. Trước khi chạy nhiều instance production, cần một quy trình migration schema duy nhất và có version; không để nhiều replica đồng thời tự thực hiện DDL. Việc đó chưa được thêm vì project hiện không cho phép tự ý bổ sung migration technology.
 
@@ -373,34 +375,66 @@ Module Course/Lesson đã được gỡ khỏi frontend, backend và cấu hình
 
 Bản cài mới không tạo bảng lớp học. Với database đã có, các bảng lớp học và volume `devedu_course_materials` cũ được giữ nguyên, không còn được ứng dụng sử dụng. Không chạy `docker compose down -v` để cập nhật vì có thể mất dữ liệu PostgreSQL. Mã nguồn đã gỡ có thể khôi phục từ Git nếu cần.
 
-## Exam
+## Contest
 
-Module Exam hỗ trợ lịch thi, thời lượng theo phút, câu hỏi Multiple Choice/Coding, một lượt thi cho mỗi sinh viên và lưu từng câu trả lời.
+Module Contest sử dụng User, Problem, editor và Docker Judge hiện có; dữ liệu lưu thật trong PostgreSQL, không có Contest/leaderboard minh họa. Teacher/Admin vào **Contests → Create Contest**, chọn các bài từ catalog, sắp thứ tự A–Z, đặt điểm, thời gian bắt đầu và thời lượng. Student/Teacher/Admin đều có thể đăng ký và nộp bài.
 
-API giáo viên:
+- Enter Contest mở bài đầu tiên trong workspace `/contests/{id}/problems/{problemId}`; sidebar chuyển bài nhanh và hiển thị Solved/Attempted/Not attempted. Code được giữ trong cache phiên theo bài/ngôn ngữ khi chuyển tab/bài, bên cạnh autosave vào draft Problem hiện có.
+- Timer cố định khi cuộn trang; hết giờ khóa Submit ở UI và API. Không chuyển khỏi editor khi Accepted. Kết quả Judge hiển thị riêng, cập nhật điểm và trạng thái bài ngay sau nộp.
+- `/contests/{id}/leaderboard` hiển thị từng bài, điểm, lượt sai trước Accepted đầu tiên và Your Rank. Dữ liệu cập nhật mỗi 5 giây khi tab đang mở; transport polling tách khỏi UI, có cleanup và không gửi poll chồng nhau.
+- `/contests/{id}/submissions` có filter All/Accepted/Wrong Answer/Other, điểm từng lượt, runtime, thời gian. `/rules` lấy scoring/penalty/attempts/resubmission/ranking từ backend. Quy tắc hiện tại **không phạt lượt sai**; Time là thời gian giải bài cuối cùng, không phải penalty ICPC.
+- Bộ tính điểm riêng tại `application/contest/scoring/ContestScoring`. Không thay Judge: chưa có số liệu bộ nhớ hay verdict Memory Limit riêng; UI thông báo chưa hỗ trợ thay vì hiển thị số giả.
+
+- `/contests`: Upcoming/Ongoing/Finished, thời gian, số bài, số người tham gia và CTA theo trạng thái.
+- `/contests/{id}`: Problems, Leaderboard, My Submissions, Rules. Nút Solve mở lại `ProblemWorkspace` ngay trong trang chi tiết; không tạo editor mới. URL có `?tab=problems&problem={problemId}` có thể tải lại/đi Back.
+- Countdown đồng bộ với `serverTime`, cập nhật mỗi giây và tự khóa Submit khi hết giờ. API vẫn kiểm tra hạn nộp độc lập, không tin đồng hồ hay trạng thái trên browser.
+- Một lượt nộp được nhận hợp lệ trong `[startsAt, endsAt)` vẫn được tính nếu Judge trả kết quả sau hạn. Đăng ký được phép trước và trong Contest; gọi lại không tạo bản ghi trùng.
+- Mỗi bài Accepted cộng điểm một lần. Xếp hạng theo điểm giảm dần, thời điểm giải bài cuối cùng tăng dần (lấy Accepted đầu tiên mỗi bài), sau cùng theo public ID. My Submissions chỉ trả các lượt nộp của tài khoản hiện tại.
+- Chỉ Submit từ Contest được tính điểm Contest. Nộp bài qua `/problems`, chạy thử và tiến độ cũ không tính; lượt nộp Contest vẫn cập nhật tiến độ Problem cá nhân hiện có.
+- Contest hiện **Unrated**, chưa có công thức rating, sửa/xóa Contest hoặc chống gian lận. Các bài vẫn thuộc catalog công khai; thay đổi bài gốc sẽ được phản ánh trong Contest. Không dùng mô hình này để cam kết đề thi bí mật.
+
+API:
 
 ```http
-GET  /api/teacher/exams
-POST /api/teacher/exams
-POST /api/teacher/exams/{examId}/questions
-GET  /api/teacher/exams/{examId}/results
-Authorization: Bearer <teacher-access-token>
+GET  /api/contests?status=UPCOMING|ONGOING|FINISHED
+GET  /api/contests/{id}
+POST /api/teacher/contests
+POST /api/contests/{id}/registration
+POST /api/contests/{id}/problems/{problemId}/submissions
 ```
 
-API tham gia kỳ thi (cả ba role đã xác thực):
+Tạo Contest nhận `{name,type,startsAt,durationMinutes,rules,problems:[{problemId,points}]}`; `type` là `WEEKLY`, `PRACTICE` hoặc `CUSTOM`. Giới hạn 1–26 bài duy nhất, 1–10000 điểm/bài, 1–10080 phút và thời gian bắt đầu trong tương lai. Submission dùng `{language,sourceCode}` như Problem hiện có. Bảng mới: `contests`, `contest_problems`, `contest_registrations`, `contest_submissions`; không thay schema hoặc contract submission cũ.
 
-```http
-GET  /api/exams
-GET  /api/exams/{slug}
-POST /api/exams/{slug}/attempts
-GET  /api/exams/attempts/{attemptId}
-PUT  /api/exams/attempts/{attemptId}/answers/{questionId}
-POST /api/exams/attempts/{attemptId}/submit
-GET  /api/exams/attempts/{attemptId}/result
-Authorization: Bearer <access-token>
+Kiểm thử:
+
+```powershell
+cd backend
+.\mvnw.cmd clean verify
+cd ..
+npm.cmd run build --prefix frontend
+node --test frontend/src/features/contest/contestTime.test.mjs frontend/src/features/contest/contestPresentation.test.mjs frontend/src/features/contest/api/contestUpdates.test.mjs frontend/src/features/compiler/webProject.test.mjs
+# Sau khi build/start Compose và chuẩn bị judge images:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-contest.ps1
 ```
 
-Multiple Choice được chấm tự động khi nộp bài. Câu Coding chỉ lưu source code và được báo `pendingCodingQuestions`; project chưa có code judge hoặc workflow chấm tay. Đáp án đúng không được trả trong API sinh viên trước hoặc sau khi thi.
+Smoke test tạo schema PostgreSQL và backend container tạm riêng, kiểm tra tạo/đăng ký/giới hạn thời gian/nộp bằng Judge thật/điểm/lịch sử riêng tư, rồi chỉ xóa schema và container kiểm thử vừa tạo. Không sửa dữ liệu ứng dụng đang sử dụng.
+
+### Contest mẫu (chạy thủ công khi cần)
+
+`scripts/add-sample-contests.sql` thêm 3 Contest Unrated, tham chiếu bài tập đang có và admin hiện có: Warm-up bắt đầu sau 24 giờ (3 bài/120 phút), Algorithm Sprint bắt đầu trước thời điểm chạy script 15 phút (4 bài/180 phút), Practice Archive đã kết thúc (4 bài/120 phút). Không tạo user, lượt nộp hoặc thứ hạng giả.
+
+Chạy từ thư mục gốc với Compose đang hoạt động:
+
+```powershell
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+Get-Content scripts/add-sample-contests.sql -Raw -Encoding utf8 | docker compose exec -T postgres sh -c 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Script có transaction và kiểm tra bài tập trước khi thêm. Chạy lại không tạo trùng, không đổi thời gian hay dữ liệu các Contest đã có. Trạng thái thay đổi tự nhiên theo thời gian; restart Docker không đặt lại đồng hồ. Script không nằm trong luồng khởi động ứng dụng.
+
+## Module đã gỡ bỏ
+
+Exam (Kỳ thi) đã được gỡ khỏi frontend, backend và schema khởi tạo mới. Các bảng/dữ liệu Exam cũ được giữ nguyên, không tự động xóa. Contest là module độc lập và vẫn hoạt động.
 
 ### 3. Frontend
 
@@ -434,4 +468,4 @@ npm audit
 
 ## Phạm vi hiện tại
 
-Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Exam và endpoint trạng thái hệ thống. Câu Coding trong Exam chưa nối với judge; chưa có upload/storage video, chống gian lận hay AI.
+Project hiện cung cấp foundation, JWT authentication, password hashing, ba role `STUDENT`, `TEACHER`, `ADMIN`, trang admin quản lý role, Compiler chạy code qua Docker sandbox, Programming Problems có Docker Code Judge, Contest có đăng ký/nộp bài/xếp hạng và endpoint trạng thái hệ thống. Chưa có upload/storage video, rating Contest, chống gian lận hay AI.

@@ -27,61 +27,7 @@ DROP SEQUENCE IF EXISTS teacher_code_seq;
 -- Remove the retired Interview module and its legacy data.
 DROP TABLE IF EXISTS interview_questions;
 
-CREATE TABLE IF NOT EXISTS exams (
-    id UUID PRIMARY KEY,
-    slug VARCHAR(120) NOT NULL UNIQUE,
-    title VARCHAR(180) NOT NULL,
-    description TEXT NOT NULL,
-    teacher_id UUID NOT NULL REFERENCES users(id),
-    scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 1 AND 1440),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS exam_questions (
-    id UUID PRIMARY KEY,
-    exam_id UUID NOT NULL REFERENCES exams(id),
-    type VARCHAR(30) NOT NULL CHECK (type IN ('MULTIPLE_CHOICE', 'CODING')),
-    prompt TEXT NOT NULL,
-    correct_option_index INTEGER,
-    coding_language VARCHAR(20) CHECK (coding_language IN ('CPP', 'JAVA', 'PYTHON', 'HTML', 'MYSQL')),
-    points INTEGER NOT NULL CHECK (points > 0),
-    position INTEGER NOT NULL CHECK (position > 0),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    UNIQUE (exam_id, position)
-);
-
-CREATE TABLE IF NOT EXISTS exam_question_options (
-    id UUID PRIMARY KEY,
-    question_id UUID NOT NULL REFERENCES exam_questions(id),
-    option_index INTEGER NOT NULL CHECK (option_index >= 0),
-    value VARCHAR(1000) NOT NULL,
-    UNIQUE (question_id, option_index)
-);
-
-CREATE TABLE IF NOT EXISTS exam_attempts (
-    id UUID PRIMARY KEY,
-    exam_id UUID NOT NULL REFERENCES exams(id),
-    student_id UUID NOT NULL REFERENCES users(id),
-    status VARCHAR(20) NOT NULL CHECK (status IN ('IN_PROGRESS', 'SUBMITTED')),
-    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    submitted_at TIMESTAMP WITH TIME ZONE,
-    automatic_score INTEGER NOT NULL DEFAULT 0 CHECK (automatic_score >= 0),
-    automatic_max_score INTEGER NOT NULL DEFAULT 0 CHECK (automatic_max_score >= automatic_score),
-    pending_coding_questions INTEGER NOT NULL DEFAULT 0 CHECK (pending_coding_questions >= 0),
-    UNIQUE (exam_id, student_id)
-);
-
-CREATE TABLE IF NOT EXISTS exam_answers (
-    id UUID PRIMARY KEY,
-    attempt_id UUID NOT NULL REFERENCES exam_attempts(id),
-    question_id UUID NOT NULL REFERENCES exam_questions(id),
-    selected_option_index INTEGER,
-    source_code TEXT,
-    answered_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    UNIQUE (attempt_id, question_id)
-);
+-- Retired Exam tables are not created; existing historical data is retained.
 
 
 CREATE TABLE IF NOT EXISTS programming_problems (
@@ -165,10 +111,76 @@ CREATE TABLE IF NOT EXISTS problem_drafts (
 );
 
 
-CREATE INDEX IF NOT EXISTS idx_exams_scheduled_at ON exams (scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_exams_teacher_scheduled_at ON exams (teacher_id, scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_exam_attempts_exam_started_at ON exam_attempts (exam_id, started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_exam_answers_attempt_answered_at ON exam_answers (attempt_id, answered_at);
+CREATE TABLE IF NOT EXISTS contests (
+    id UUID PRIMARY KEY,
+    name VARCHAR(180) NOT NULL,
+    type VARCHAR(20) NOT NULL CHECK (type IN ('WEEKLY', 'PRACTICE', 'CUSTOM')),
+    starts_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    ends_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 1 AND 10080),
+    created_by UUID NOT NULL REFERENCES users(id),
+    rules TEXT NOT NULL DEFAULT '',
+    CHECK (ends_at > starts_at)
+);
+CREATE TABLE IF NOT EXISTS contest_problems (
+    contest_id UUID NOT NULL REFERENCES contests(id),
+    problem_id UUID NOT NULL REFERENCES programming_problems(id),
+    position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 25),
+    points INTEGER NOT NULL CHECK (points BETWEEN 1 AND 10000),
+    PRIMARY KEY (contest_id, position),
+    UNIQUE (contest_id, problem_id)
+);
+CREATE TABLE IF NOT EXISTS contest_registrations (
+    contest_id UUID NOT NULL REFERENCES contests(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    registered_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (contest_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS contest_submissions (
+    submission_id UUID PRIMARY KEY REFERENCES problem_submissions(id),
+    contest_id UUID NOT NULL REFERENCES contests(id),
+    received_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contests_schedule ON contests (starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_contest_registrations_user ON contest_registrations (user_id, contest_id);
+CREATE INDEX IF NOT EXISTS idx_contest_submissions_time ON contest_submissions (contest_id, received_at);
+
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS rated BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20) NOT NULL DEFAULT 'BEGINNER'
+    CHECK (difficulty IN ('BEGINNER','INTERMEDIATE','ADVANCED'));
+CREATE TABLE IF NOT EXISTS virtual_contests (
+    id UUID PRIMARY KEY, contest_id UUID NOT NULL REFERENCES contests(id), user_id UUID NOT NULL REFERENCES users(id),
+    starts_at TIMESTAMPTZ NOT NULL, ends_at TIMESTAMPTZ NOT NULL CHECK (ends_at > starts_at)
+);
+CREATE INDEX IF NOT EXISTS idx_virtual_contest_user ON virtual_contests(user_id, contest_id, starts_at DESC);
+ALTER TABLE contest_submissions ADD COLUMN IF NOT EXISTS virtual_id UUID REFERENCES virtual_contests(id);
+ALTER TABLE contest_submissions ADD COLUMN IF NOT EXISTS mode VARCHAR(10) NOT NULL DEFAULT 'OFFICIAL' CHECK (mode IN ('OFFICIAL','VIRTUAL'));
+CREATE INDEX IF NOT EXISTS idx_virtual_submissions ON contest_submissions(virtual_id, received_at);
+CREATE TABLE IF NOT EXISTS contest_submission_requests (
+    scope_id UUID NOT NULL, user_id UUID NOT NULL REFERENCES users(id), request_key VARCHAR(100) NOT NULL,
+    request_hash VARCHAR(64) NOT NULL, submission_id UUID NOT NULL REFERENCES problem_submissions(id),
+    PRIMARY KEY(scope_id, user_id, request_key)
+);
+CREATE TABLE IF NOT EXISTS contest_finalizations (
+    contest_id UUID PRIMARY KEY REFERENCES contests(id), snapshot TEXT NOT NULL, finalized_at TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contest_results (
+    contest_id UUID NOT NULL REFERENCES contest_finalizations(contest_id), user_id UUID NOT NULL REFERENCES users(id),
+    rank INTEGER NOT NULL CHECK(rank > 0), score INTEGER NOT NULL CHECK(score >= 0), solved INTEGER NOT NULL,
+    time_seconds BIGINT NOT NULL, standing TEXT NOT NULL, PRIMARY KEY(contest_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_contest_results_user ON contest_results(user_id,contest_id);
+CREATE TABLE IF NOT EXISTS user_contest_ratings (
+    user_id UUID PRIMARY KEY REFERENCES users(id), rating INTEGER NOT NULL CHECK(rating >= 0), peak INTEGER NOT NULL CHECK(peak >= rating)
+);
+CREATE TABLE IF NOT EXISTS rating_history (
+    contest_id UUID NOT NULL, user_id UUID NOT NULL, previous_rating INTEGER NOT NULL, new_rating INTEGER NOT NULL,
+    rating_change INTEGER NOT NULL, calculated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY(contest_id,user_id), FOREIGN KEY(contest_id,user_id) REFERENCES contest_results(contest_id,user_id),
+    CHECK (new_rating >= 0 AND new_rating - previous_rating = rating_change)
+);
+CREATE INDEX IF NOT EXISTS idx_rating_history_user ON rating_history(user_id,calculated_at);
+
 CREATE INDEX IF NOT EXISTS idx_programming_problems_title ON programming_problems (title);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_topic_title ON programming_problems (topic, title);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_filters

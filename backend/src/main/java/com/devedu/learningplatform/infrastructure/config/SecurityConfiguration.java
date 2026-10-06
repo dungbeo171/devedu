@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -47,7 +48,8 @@ public class SecurityConfiguration {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            CorsConfigurationSource corsConfigurationSource
+            CorsConfigurationSource corsConfigurationSource,
+            ObjectProvider<OAuth2AuthorizationRequestResolver> authorizationRequestResolver
     ) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
@@ -69,12 +71,15 @@ public class SecurityConfiguration {
                         )
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/problems", "/api/problems/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/contests", "/api/contests/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/contests/*/results", "/api/profiles/*/contests").permitAll()
+                        .requestMatchers("/api/contests/*/virtual", "/api/contests/*/virtual/*/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/contests/*/registration", "/api/contests/*/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/problems/*/runs").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/student/problem-progress").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/student/problems/*/draft").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/student/problems/*/draft").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
-                        .requestMatchers("/api/exams", "/api/exams/**").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/teacher/**").hasAnyRole("TEACHER", "ADMIN")
                         .anyRequest().authenticated())
@@ -88,6 +93,7 @@ public class SecurityConfiguration {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         if (githubOAuth2UserService != null && oauthSuccessHandler != null && oauthFailureHandler != null) {
             http.oauth2Login(oauth -> oauth
+                    .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(authorizationRequestResolver.getObject()))
                     .userInfoEndpoint(userInfo -> userInfo.userService(githubOAuth2UserService))
                     .successHandler(oauthSuccessHandler)
                     .failureHandler(oauthFailureHandler));

@@ -179,9 +179,8 @@ export function CodeCompiler() {
     <section>
       <header className="ui-page-header mb-5">
         <div>
-          <p className="ui-kicker"><IconTerminal className="h-4 w-4" /> Không gian thực hành</p>
-          <h1 className="ui-page-title mt-2">Trình biên dịch trực tuyến</h1>
-          <p className="ui-page-description">Viết, chạy và kiểm tra mã nguồn trong một workspace tập trung.</p>
+          <h1 className="ui-page-title">Trình biên dịch trực tuyến</h1>
+
         </div>
       </header>
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-900 shadow-sm">
