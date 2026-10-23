@@ -14,8 +14,13 @@ class ContestJpaEntity {
     @Column(name = "ends_at", nullable = false) Instant endsAt;
     @Column(name = "duration_minutes", nullable = false) int durationMinutes;
     @Column(name = "created_by", nullable = false) UUID createdBy;
-    @Column(nullable = false, columnDefinition = "TEXT") String rules;
-    @Column(nullable = false) boolean rated;
+    @Column(name = "created_at", nullable = false) Instant createdAt;
+    @Column(name = "deleted_at") Instant deletedAt;
+    @Column(nullable = false, length = 5000) String description;
+    @Column(name = "monitoring_enabled", nullable = false) boolean monitoringEnabled;
+    @Column(nullable = false) boolean published;
+    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) Contest.Visibility visibility;
+    @Enumerated(EnumType.STRING) @Column(name = "participation_mode", nullable = false, length = 20) Contest.ParticipationMode participationMode;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) Contest.Difficulty difficulty;
     @ElementCollection
     @CollectionTable(name = "contest_problems", joinColumns = @JoinColumn(name = "contest_id"))
@@ -24,13 +29,17 @@ class ContestJpaEntity {
     protected ContestJpaEntity() {}
     ContestJpaEntity(Contest c) {
         id = c.id(); name = c.name(); type = c.type(); startsAt = c.startsAt(); endsAt = c.endsAt();
-        durationMinutes = c.durationMinutes(); createdBy = c.createdBy(); rules = c.rules();
-        rated = c.rated(); difficulty = c.difficulty();
+        durationMinutes = c.durationMinutes(); createdBy = c.createdBy();
+        createdAt = c.createdAt();
+        difficulty = c.difficulty();
+        description = c.description(); monitoringEnabled = c.monitoringEnabled();
+        published = c.published(); visibility = c.visibility(); participationMode = c.participationMode();
         c.problems().forEach(p -> problems.add(new ContestProblemValue(p.problemId(), p.points())));
     }
     Contest toDomain() {
-        return new Contest(id, name, type, startsAt, durationMinutes, createdBy, rules,
-                problems.stream().map(p -> new Contest.Problem(p.problemId, p.points)).toList(), rated, difficulty);
+        return new Contest(id, name, type, startsAt, durationMinutes, createdBy,
+                problems.stream().map(p -> new Contest.Problem(p.problemId, p.points)).toList(), difficulty, endsAt,
+                description, monitoringEnabled, published, visibility, participationMode, createdAt);
     }
 }
 

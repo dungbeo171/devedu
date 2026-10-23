@@ -38,3 +38,10 @@ export function problemListUrl(state: ProblemListState): string {
   const query = params.toString()
   return `/problems${query ? `?${query}` : ''}`
 }
+
+export function problemPageWindow(page: number, totalPages: number, followingPages = 3): number[] {
+  const safeTotal = Math.max(1, Math.trunc(totalPages))
+  const safePage = Math.min(safeTotal, Math.max(1, Math.trunc(page)))
+  const end = Math.min(safeTotal, safePage + Math.max(0, Math.trunc(followingPages)))
+  return Array.from({ length: end - safePage + 1 }, (_, index) => safePage + index)
+}

@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.devedu.learningplatform.application.security.AuthenticatedUser;
 
 @RestController
 @RequestMapping("/api/code")
@@ -21,9 +23,15 @@ public class CodeExecutionController {
     }
 
     @PostMapping("/execute")
-    public ResponseEntity<CodeExecutionResponse> execute(@RequestBody CodeExecutionRequest request) {
+    public ResponseEntity<CodeExecutionResponse> execute(
+            @RequestBody CodeExecutionRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
         var result = executeCodeUseCase.execute(
-                new ExecuteCodeCommand(request.language(), request.code(), request.input(), request.files())
+                new ExecuteCodeCommand(
+                        request.language(), request.code(), request.input(), request.files(),
+                        user == null ? null : user.id()
+                )
         );
         return ResponseEntity.ok(
                 new CodeExecutionResponse(result.language(), result.status(), result.output())

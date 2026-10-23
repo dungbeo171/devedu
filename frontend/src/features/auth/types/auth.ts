@@ -19,6 +19,12 @@ export interface AuthenticationResponse {
   user: AuthenticatedUser
 }
 
+export interface RegistrationVerificationResponse {
+  email: string
+  expiresInSeconds: number
+  resendAfterSeconds: number
+}
+
 export interface OAuthProvidersResponse {
   enabledProviders: OAuthProvider[]
 }

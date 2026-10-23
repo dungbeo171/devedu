@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { problemListUrl, readProblemListState } from './problemListState.ts'
+import { problemListUrl, problemPageWindow, readProblemListState } from './problemListState.ts'
 
 test('a fresh problem list has no filters and starts on page one', () => {
   assert.deepEqual(readProblemListState(''), {
@@ -31,4 +31,11 @@ test('clearing filters removes their URL parameters and retired sorting is ignor
   const cleared = { ...initial, difficulty: '', language: '', progress: '', search: '', page: 1 }
   assert.equal(problemListUrl(cleared), '/problems?topic=JAVA')
   assert.equal(problemListUrl(readProblemListState('?sort=DESC')), '/problems')
+})
+
+test('pagination only shows the current page and three following pages', () => {
+  assert.deepEqual(problemPageWindow(1, 20), [1, 2, 3, 4])
+  assert.deepEqual(problemPageWindow(8, 20), [8, 9, 10, 11])
+  assert.deepEqual(problemPageWindow(18, 20), [18, 19, 20])
+  assert.deepEqual(problemPageWindow(20, 20), [20])
 })

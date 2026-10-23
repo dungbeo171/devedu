@@ -28,7 +28,7 @@ export function useContestResource<T extends { serverTime: string }>(path: strin
       setError('')
       setErrorStatus(null)
     } catch (reason) {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Không thể tải Contest.')
+      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : 'Không thể tải cuộc thi.')
       if (!controller.signal.aborted) setErrorStatus(reason instanceof ContestRequestError ? reason.status : null)
     } finally {
       if (!controller.signal.aborted) { setLoading(false); setRefreshing(false) }

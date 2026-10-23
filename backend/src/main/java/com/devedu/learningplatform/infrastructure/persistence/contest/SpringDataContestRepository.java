@@ -6,12 +6,16 @@ import java.time.Instant;
 import java.util.*;
 
 interface SpringDataContestRepository extends JpaRepository<ContestJpaEntity, UUID> {
-    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where "
-            + "(:status = 'UPCOMING' and c.startsAt > :now) or (:status = 'ONGOING' and c.startsAt <= :now and c.endsAt > :now) "
-            + "or (:status = 'FINISHED' and c.endsAt <= :now) order by c.startsAt, c.id")
+    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where c.deletedAt is null and "
+            + "c.published = true and c.visibility = com.devedu.learningplatform.domain.contest.Contest.Visibility.PUBLIC and ((:status = 'UPCOMING' and c.startsAt > :now) or (:status = 'ONGOING' and c.startsAt <= :now and c.endsAt > :now) "
+            + "or (:status = 'FINISHED' and c.endsAt <= :now)) order by c.startsAt, c.id")
     List<ContestJpaEntity> list(String status, Instant now);
-    @Query("select c from ContestJpaEntity c left join fetch c.problems where c.id = :id")
+    @Query("select c from ContestJpaEntity c left join fetch c.problems where c.id = :id and c.deletedAt is null")
     Optional<ContestJpaEntity> detail(UUID id);
-    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where c.id in :ids")
+    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where c.id in :ids and c.deletedAt is null")
     List<ContestJpaEntity> details(List<UUID> ids);
+    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where c.deletedAt is null order by c.createdAt desc, c.id")
+    List<ContestJpaEntity> allForManagement();
+    @Query("select distinct c from ContestJpaEntity c left join fetch c.problems where c.createdBy = :userId and c.deletedAt is null order by c.startsAt desc")
+    List<ContestJpaEntity> ownedBy(UUID userId);
 }

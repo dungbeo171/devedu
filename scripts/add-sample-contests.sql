@@ -1,6 +1,6 @@
 -- Opt-in local data only. Never run from application startup/schema.sql.
 -- Uses existing Problems and an existing ADMIN as creator. No fake participants,
--- submissions, results or ratings. A repeat run keeps existing schedules intact.
+-- submissions or results. A repeat run keeps existing schedules intact.
 BEGIN;
 SELECT pg_advisory_xact_lock(684390124);
 
@@ -39,13 +39,13 @@ BEGIN
             RAISE EXCEPTION 'Missing active problems for %; no sample contests were added', sample.name;
         END IF;
 
-        INSERT INTO contests (id, name, type, starts_at, ends_at, duration_minutes, created_by, rules, rated, difficulty)
+        INSERT INTO contests (id, name, type, starts_at, ends_at, duration_minutes, created_by, description, difficulty)
         VALUES (sample.id, sample.name, sample.type,
                 CURRENT_TIMESTAMP + sample.start_offset,
                 CURRENT_TIMESTAMP + sample.start_offset + make_interval(mins => sample.duration_minutes),
                 sample.duration_minutes, creator_id,
-                'Contest mẫu để trải nghiệm DevEdu. Không tính rating. Mỗi bài được cộng điểm một lần khi Accepted; có thể nộp lại trong thời gian thi. Lượt sai không bị phạt. Xếp hạng theo điểm, sau đó thời gian giải bài cuối cùng và ID công khai. Các bài tham chiếu thư viện hiện có.',
-                FALSE, sample.difficulty);
+                'Contest mẫu để trải nghiệm DevEdu. Mỗi bài được cộng điểm một lần khi Accepted; có thể nộp lại trong thời gian thi. Lượt sai không bị phạt. Xếp hạng theo điểm, sau đó thời gian giải bài cuối cùng và ID công khai. Các bài tham chiếu thư viện hiện có.',
+                sample.difficulty);
 
         INSERT INTO contest_problems (contest_id, problem_id, position, points)
         SELECT sample.id, p.id, requested.ordinality - 1, requested.ordinality * 100

@@ -1,6 +1,7 @@
 package com.devedu.learningplatform.infrastructure.persistence.problem;
 
 import com.devedu.learningplatform.application.port.out.ProblemSubmissionRepository;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationSignalsPort;
 import com.devedu.learningplatform.domain.model.ProblemSubmission;
 import org.springframework.stereotype.Repository;
 
@@ -11,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.UUID;
 
 @Repository
-public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepository {
+public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepository, ProblemRecommendationSignalsPort {
 
     private final SpringDataProblemSubmissionRepository repository;
 
@@ -54,6 +55,19 @@ public class ProblemSubmissionRepositoryAdapter implements ProblemSubmissionRepo
         repository.findAcceptedProblemIdsByStudentIds(studentIds)
                 .forEach(pair -> result.get(pair.getStudentId()).add(pair.getProblemId()));
         return result;
+    }
+
+    @Override
+    public java.util.List<ProblemRecommendationSignalsPort.Activity> findByUserId(UUID userId) {
+        return repository.findRecommendationActivityByStudentId(userId).stream()
+                .map(activity -> new ProblemRecommendationSignalsPort.Activity(
+                        activity.getProblemId(),
+                        activity.getLanguage(),
+                        activity.getAttempts(),
+                        activity.getAcceptedAttempts(),
+                        activity.getLastSubmittedAt()
+                ))
+                .toList();
     }
 
     private ProblemSubmission toDomain(ProblemSubmissionJpaEntity entity) {

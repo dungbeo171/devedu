@@ -31,19 +31,19 @@ export function VirtualContestPage({ contestId }: { contestId: string }) {
       const result = await contestRequest<VirtualSession>(`/api/contests/${encodeURIComponent(contestId)}/virtual`, { method: 'POST' })
       window.history.replaceState(null, '', `/contests/${contestId}/virtual?session=${result.session.id}&enter=1`)
       if (sessionId === result.session.id) await resource.reload(); else setSessionId(result.session.id)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không thể bắt đầu Virtual Contest.') }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Không thể bắt đầu thi thử.') }
     finally { setStarting(false) }
   }
-  if (!getStoredUser()) return <ContestEmpty title="Đăng nhập để tham gia Virtual Contest"><a href="/login" className="ui-button-primary">Đăng nhập</a></ContestEmpty>
+  if (!getStoredUser()) return <ContestEmpty title="Đăng nhập để tham gia thi thử"><a href="/login" className="ui-button-primary">Đăng nhập</a></ContestEmpty>
   if (resource.loading) return <ContestLoading />
-  if (!resource.data) return <section><a className="ui-button-ghost" href={`/contests/${contestId}`}>← Official Contest</a>
+  if (!resource.data) return <section><a className="ui-button-ghost" href={`/contests/${contestId}`}>← Cuộc thi chính thức</a>
     {resource.errorStatus !== 404 && resource.error && <ContestError message={resource.error} onRetry={() => void resource.reload()} />}
-    <ContestEmpty title="Virtual Contest"><p className="mb-4">Bắt đầu lượt thi riêng với đủ thời lượng. Không ảnh hưởng leaderboard hoặc rating chính thức. Chỉ khả dụng sau khi Contest kết thúc.</p>
-      <button type="button" className="ui-button-primary" disabled={starting} onClick={() => void start()}>{starting ? 'Starting…' : 'Start Virtual Contest'}</button></ContestEmpty>
+    <ContestEmpty title="Thi thử"><p className="mb-4">Bắt đầu lượt thi riêng với đủ thời lượng. Không ảnh hưởng bảng xếp hạng chính thức. Chỉ khả dụng sau khi cuộc thi kết thúc.</p>
+      <button type="button" className="ui-button-primary" disabled={starting} onClick={() => void start()}>{starting ? 'Đang bắt đầu…' : 'Bắt đầu thi thử'}</button></ContestEmpty>
     {error && <ContestError message={error} onRetry={() => setError('')} />}</section>
   const ended = resource.now >= Date.parse(resource.data.session.endsAt)
   return <>
-    {ended && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm"><span>Virtual attempt ended · Official rating không thay đổi.</span><button className="ui-button-secondary" disabled={starting} onClick={() => void start()}>{starting ? 'Starting…' : 'Start new virtual attempt'}</button></div>}
+    {ended && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm"><span>Lượt thi thử đã kết thúc</span><button className="ui-button-secondary" disabled={starting} onClick={() => void start()}>{starting ? 'Đang bắt đầu…' : 'Bắt đầu lượt thi thử mới'}</button></div>}
     {error && <ContestError message={error} onRetry={() => setError('')} />}
     <ContestExperience key={resource.data.session.id} contestId={contestId} virtualId={resource.data.session.id} resource={{ ...resource, data: resource.data.detail }} />
   </>

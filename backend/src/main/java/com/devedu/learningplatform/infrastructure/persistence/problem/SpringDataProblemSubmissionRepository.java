@@ -7,6 +7,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
+import com.devedu.learningplatform.domain.model.CodeLanguage;
 
 interface SpringDataProblemSubmissionRepository
         extends JpaRepository<ProblemSubmissionJpaEntity, UUID> {
@@ -31,4 +33,26 @@ interface SpringDataProblemSubmissionRepository
               and submission.status = com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED
             """)
     List<AcceptedProblemPair> findAcceptedProblemIdsByStudentIds(@Param("studentIds") Set<UUID> studentIds);
+
+    interface RecommendationActivityProjection {
+        UUID getProblemId();
+        CodeLanguage getLanguage();
+        long getAttempts();
+        long getAcceptedAttempts();
+        Instant getLastSubmittedAt();
+    }
+
+    @Query("""
+            select submission.problemId as problemId,
+                   submission.language as language,
+                   count(submission.id) as attempts,
+                   sum(case when submission.status = com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED then 1 else 0 end) as acceptedAttempts,
+                   max(submission.submittedAt) as lastSubmittedAt
+            from ProblemSubmissionJpaEntity submission
+            where submission.studentId = :studentId
+            group by submission.problemId, submission.language
+            """)
+    List<RecommendationActivityProjection> findRecommendationActivityByStudentId(
+            @Param("studentId") UUID studentId
+    );
 }

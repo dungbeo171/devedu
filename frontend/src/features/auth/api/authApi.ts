@@ -1,19 +1,58 @@
-import type { AuthenticatedUser, AuthenticationResponse, OAuthProvidersResponse } from '../types/auth'
+import type {
+  AuthenticatedUser,
+  AuthenticationResponse,
+  OAuthProvidersResponse,
+  RegistrationVerificationResponse,
+  UserRole,
+} from '../types/auth'
 
-export async function authenticateWithEmail(
-  mode: 'login' | 'register',
+async function readApiError(response: Response, fallback: string) {
+  const error = await response.json().catch(() => null) as { message?: string } | null
+  return error?.message ?? fallback
+}
+
+export async function loginWithEmail(
   email: string,
   password: string,
-  name?: string,
 ): Promise<AuthenticationResponse> {
-  const response = await fetch(`/api/auth/${mode}`, {
+  const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(mode === 'register' ? { name, email, password } : { email, password }),
+    body: JSON.stringify({ email, password }),
   })
   if (!response.ok) {
-    const error = await response.json().catch(() => null) as { message?: string } | null
-    throw new Error(error?.message ?? 'Không thể xác thực tài khoản.')
+    throw new Error(await readApiError(response, 'Không thể đăng nhập.'))
+  }
+  return response.json() as Promise<AuthenticationResponse>
+}
+
+export async function requestEmailRegistration(
+  name: string,
+  email: string,
+  password: string,
+): Promise<RegistrationVerificationResponse> {
+  const response = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, email, password }),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, 'Không thể gửi mã xác nhận.'))
+  }
+  return response.json() as Promise<RegistrationVerificationResponse>
+}
+
+export async function verifyEmailRegistration(
+  email: string,
+  code: string,
+): Promise<AuthenticationResponse> {
+  const response = await fetch('/api/auth/register/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  })
+  if (!response.ok) {
+    throw new Error(await readApiError(response, 'Không thể xác nhận email.'))
   }
   return response.json() as Promise<AuthenticationResponse>
 }
@@ -45,7 +84,8 @@ export function getStoredAccessToken(): string | null {
 }
 
 export function getStoredUser(): AuthenticatedUser | null {
-  if (!getStoredAccessToken()) return null
+  const token = getStoredAccessToken()
+  if (!token) return null
   try {
     const value = localStorage.getItem('devedu.user')
     if (!value) {
@@ -53,9 +93,26 @@ export function getStoredUser(): AuthenticatedUser | null {
       return null
     }
     const user = JSON.parse(value) as AuthenticatedUser
-    return { ...user, name: user.name?.trim() || user.email.split('@')[0] }
+    const tokenRole = roleFromJwt(token)
+    const synchronized = { ...user, role: tokenRole ?? user.role,
+      name: user.name?.trim() || user.email.split('@')[0] }
+    if (tokenRole && tokenRole !== user.role) localStorage.setItem('devedu.user', JSON.stringify(synchronized))
+    return synchronized
   } catch {
     clearAuthentication()
+    return null
+  }
+}
+
+function roleFromJwt(token: string): UserRole | null {
+  try {
+    const encodedPayload = token.split('.')[1]
+    if (!encodedPayload) return null
+    const normalized = encodedPayload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    const role = (JSON.parse(atob(padded)) as { role?: unknown }).role
+    return role === 'STUDENT' || role === 'TEACHER' || role === 'ADMIN' ? role : null
+  } catch {
     return null
   }
 }

@@ -25,6 +25,7 @@ import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
 import com.devedu.learningplatform.domain.model.ProblemTestCase;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationPreferencePort;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -54,6 +55,7 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
     private final ProblemRunStatisticsRepository runStatisticsRepository;
     private final CodeJudgeUseCase codeJudge;
     private final Clock clock;
+    private final ProblemRecommendationPreferencePort recommendationPreferences;
 
     public ProgrammingProblemsService(
             ProgrammingProblemRepository problemRepository,
@@ -64,6 +66,20 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
             CodeJudgeUseCase codeJudge,
             Clock clock
     ) {
+        this(problemRepository, submissionRepository, draftRepository, testCaseRepository,
+                runStatisticsRepository, codeJudge, clock, ProblemRecommendationPreferencePort.noop());
+    }
+
+    public ProgrammingProblemsService(
+            ProgrammingProblemRepository problemRepository,
+            ProblemSubmissionRepository submissionRepository,
+            ProblemDraftRepository draftRepository,
+            ProblemTestCaseRepository testCaseRepository,
+            ProblemRunStatisticsRepository runStatisticsRepository,
+            CodeJudgeUseCase codeJudge,
+            Clock clock,
+            ProblemRecommendationPreferencePort recommendationPreferences
+    ) {
         this.problemRepository = problemRepository;
         this.submissionRepository = submissionRepository;
         this.draftRepository = draftRepository;
@@ -71,6 +87,7 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
         this.runStatisticsRepository = runStatisticsRepository;
         this.codeJudge = codeJudge;
         this.clock = clock;
+        this.recommendationPreferences = Objects.requireNonNull(recommendationPreferences);
     }
 
     @Override
@@ -202,6 +219,11 @@ public final class ProgrammingProblemsService implements ProgrammingProblemsUseC
                 testCases
         ));
         runStatisticsRepository.record(problem.id(), result.status() == com.devedu.learningplatform.domain.model.SubmissionStatus.ACCEPTED);
+        if (command.userId() != null) {
+            recommendationPreferences.recordProblemRun(
+                    command.userId(), problem.topic(), problem.difficulty(), command.language()
+            );
+        }
         return result;
     }
 

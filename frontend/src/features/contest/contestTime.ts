@@ -11,18 +11,18 @@ export function countdown(milliseconds: number): string {
 }
 export function startsIn(milliseconds: number): string {
   const minutes = Math.max(0, Math.ceil(milliseconds / 60000))
-  return `${Math.floor(minutes / 1440)}d ${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}h ${String(minutes % 60).padStart(2, '0')}m`
+  return `${Math.floor(minutes / 1440)} ngày ${String(Math.floor(minutes / 60) % 24).padStart(2, '0')} giờ ${String(minutes % 60).padStart(2, '0')} phút`
 }
 export function endedAgo(milliseconds: number): string {
   const minutes = Math.max(0, Math.floor(milliseconds / 60000))
-  if (minutes < 1) return 'Ended just now'
-  if (minutes < 60) return `Ended ${minutes} min ago`
-  if (minutes < 1440) return `Ended ${Math.floor(minutes / 60)} hours ago`
-  return `Ended ${Math.floor(minutes / 1440)} days ago`
+  if (minutes < 1) return 'Vừa kết thúc'
+  if (minutes < 60) return `Kết thúc ${minutes} phút trước`
+  if (minutes < 1440) return `Kết thúc ${Math.floor(minutes / 60)} giờ trước`
+  return `Kết thúc ${Math.floor(minutes / 1440)} ngày trước`
 }
 export function formatStart(value: string) {
   return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 export function durationLabel(minutes: number) {
-  return `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)}h ` : ''}${minutes % 60 ? `${minutes % 60}m` : ''}`.trim()
+  return `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)} giờ ` : ''}${minutes % 60 ? `${minutes % 60} phút` : ''}`.trim()
 }

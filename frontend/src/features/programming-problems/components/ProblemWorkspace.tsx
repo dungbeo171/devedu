@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { SmartCodeEditor } from '../../../shared/components/SmartCodeEditor'
 import { HtmlPreview } from '../../../shared/components/HtmlPreview'
 import {
@@ -12,6 +12,7 @@ import {
 import {
   topicLabels,
   type ProgrammingProblemDetail,
+  type ProblemTestRun,
   type ProblemTestCaseRunResult,
   type SubmissionLanguage,
 } from '../types/programmingProblem'
@@ -34,6 +35,13 @@ interface ProblemWorkspaceProps {
   onDraftChange?: () => void
   isolatedDraft?: boolean
   draftNamespace?: string
+  onStatementCopy?: () => void
+  sidePanel?: ReactNode
+  lockSidePanelOpen?: boolean
+  sidePanelHidden?: boolean
+  compactSidePanel?: boolean
+  loadProblem?: (slug: string) => Promise<ProgrammingProblemDetail>
+  runTests?: (slug: string, language: SubmissionLanguage, sourceCode: string) => Promise<ProblemTestRun>
   submissionPolicy?: {
     disabledReason: string
     submit: typeof submitProgrammingProblem
@@ -81,7 +89,7 @@ const languageOptions: LanguageOption[] = [
 const sqlSampleDataStartMarker = '-- DEVEDU_SAMPLE_DATA_BEGIN'
 const sqlSampleDataEndMarker = '-- DEVEDU_SAMPLE_DATA_END'
 
-export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, draftCache, onDraftChange, isolatedDraft = false, draftNamespace = 'problems' }: ProblemWorkspaceProps) {
+export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, draftCache, onDraftChange, isolatedDraft = false, draftNamespace = 'problems', onStatementCopy, sidePanel, lockSidePanelOpen = false, sidePanelHidden = false, compactSidePanel = false, loadProblem, runTests }: ProblemWorkspaceProps) {
   const [problem, setProblem] = useState<ProgrammingProblemDetail | null>(null)
   const [language, setLanguage] = useState<SubmissionLanguage>('CPP')
   const [sourceCode, setSourceCode] = useState('')
@@ -132,7 +140,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     window.addEventListener('online', retry)
     window.addEventListener('focus', retry)
 
-    void getProgrammingProblem(slug)
+    void (loadProblem ?? getProgrammingProblem)(slug)
       .then(async (result) => {
         if (ignore) return
         const draft = await session.restore(async () => {
@@ -177,7 +185,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
       window.removeEventListener('online', retry)
       window.removeEventListener('focus', retry)
     }
-  }, [slug, draftOwner, draftNamespace, isolatedDraft])
+  }, [slug, draftOwner, draftNamespace, isolatedDraft, loadProblem])
 
   useEffect(() => {
     if (!problem || !draftReady) return
@@ -200,6 +208,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     ? languageOptions.filter((item) => problem.allowedLanguages.includes(item.value))
     : languageOptions
   const isSqlWorkspace = problem?.topic === 'SQL' || language === 'MYSQL'
+  const isSidePanelHidden = sidePanelHidden || (statementCollapsed && !lockSidePanelOpen)
 
   function changeLanguage(nextLanguage: SubmissionLanguage) {
     const option = languageOptions.find((item) => item.value === nextLanguage)
@@ -228,7 +237,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
     setHtmlPreview('')
     try {
       await draftSessionRef.current?.persistLocal()
-      const result = await runProgrammingProblemTests(problem.slug, language, sourceCode)
+      const result = await (runTests ?? runProgrammingProblemTests)(problem.slug, language, sourceCode)
       setTestCaseResults(result.testCases)
       setRunStatus(result.status === 'ACCEPTED' ? 'SUCCESS' : result.status)
       setOutput(`${result.passedTests}/${result.totalTests} test case đúng · ${result.executionTimeMillis} ms\n${result.diagnostic}`)
@@ -341,16 +350,20 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
         className="ui-button-ghost mb-5 px-0 hover:bg-transparent hover:text-blue-700"
       >
         <IconArrowLeft className="h-3.5 w-3.5" />
-        <span>{submissionPolicy ? 'Quay lại Contest' : 'Danh sách bài tập'}</span>
+        <span>{submissionPolicy ? 'Quay lại cuộc thi' : 'Danh sách bài tập'}</span>
       </button>
       {submissionPolicy?.disabledReason && <p role="status" className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{submissionPolicy.disabledReason}</p>}
       {draftWarning && <p role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{draftWarning}</p>}
 
       {/* Main Workspace Frame */}
-      <div className={`grid isolate overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${statementCollapsed ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.48fr)]'}`}>
+      <div className={`grid isolate overflow-hidden rounded-[18px] border border-slate-300 bg-white shadow-[0_18px_45px_-24px_rgba(15,23,42,.3)] ${isSidePanelHidden ? 'grid-cols-1' : compactSidePanel ? 'xl:grid-cols-[minmax(250px,0.68fr)_minmax(0,1.72fr)]' : 'xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.48fr)]'}`}>
         {/* Problem Statement Pane */}
-        {!statementCollapsed ? (
-          <article className="min-w-0 border-b border-slate-200 bg-white p-6 sm:p-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
+        {isSidePanelHidden ? null : sidePanel ? (
+          <aside className="min-w-0 border-b border-slate-200 bg-white xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
+            {sidePanel}
+          </aside>
+        ) : (
+          <article onCopy={onStatementCopy} className="min-w-0 border-b border-slate-200 bg-white p-6 sm:p-8 xl:max-h-[calc(100vh-8rem)] xl:overflow-y-auto xl:border-r xl:border-b-0">
             <div className="flex items-start justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 font-mono text-[11px] font-bold text-blue-400">
@@ -366,14 +379,14 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
                   {problem.difficulty === 'EASY' ? 'Dễ' : problem.difficulty === 'MEDIUM' ? 'Trung bình' : 'Khó'}
                 </span>
               </div>
-              <button
+              {!lockSidePanelOpen && <button
                 type="button"
                 onClick={() => setStatementCollapsed(true)}
                 className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 aria-label="Thu gọn đề bài"
               >
                 Thu gọn
-              </button>
+              </button>}
             </div>
 
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-slate-950">{problem.title}</h1>
@@ -422,14 +435,14 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
             </div>
           </div>
           </article>
-        ) : null}
+        )}
 
         {/* Code Editor & Execution Pane */}
         <div className="relative z-0 flex min-h-[600px] min-w-0 flex-col bg-slate-950 text-slate-100">
           {/* Top action toolbar */}
           <div className="flex flex-col gap-3 border-b border-white/10 bg-slate-900/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              {statementCollapsed ? (
+              {statementCollapsed && !lockSidePanelOpen ? (
                 <button
                   type="button"
                   onClick={() => setStatementCollapsed(false)}
@@ -495,12 +508,12 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span>{submissionPolicy ? 'Judging...' : 'Đang lưu...'}</span>
+                    <span>{submissionPolicy ? 'Đang chấm...' : 'Đang lưu...'}</span>
                   </>
                 ) : (
                   <>
                     <IconSave className="h-3.5 w-3.5" />
-                    <span>{submissionPolicy ? 'Submit' : 'Lưu bài'}</span>
+                    <span>{submissionPolicy ? 'Nộp bài' : 'Lưu bài'}</span>
                   </>
                 )}
               </button>
@@ -509,14 +522,15 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
 
           {/* Split editor & IO */}
           <div className={submissionPolicy
-            ? 'grid min-h-0 min-w-0 shrink-0 grid-rows-[500px_440px]'
-            : 'grid min-h-0 min-w-0 shrink-0 grid-rows-[500px_440px] lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)] lg:grid-rows-[610px]'}>
-            <div className={`flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-white/10 ${submissionPolicy ? '' : 'lg:border-r lg:border-b-0'}`}>
+            ? 'grid min-h-0 min-w-0 flex-1 grid-rows-[500px_400px] lg:min-h-[610px] lg:grid-cols-[minmax(0,1.72fr)_minmax(260px,0.72fr)] lg:grid-rows-[minmax(0,1fr)]'
+            : 'grid min-h-0 min-w-0 flex-1 grid-rows-[500px_440px] lg:min-h-[610px] lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)] lg:grid-rows-[minmax(0,1fr)]'}>
+            <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-b border-white/10 bg-blue-950 lg:border-r lg:border-b-0">
               <SmartCodeEditor
                 key={`${language}-${statementCollapsed ? 'statement-collapsed' : 'statement-open'}`}
                 editorId="problem-code-editor"
                 language={language}
                 value={sourceCode}
+                aiContext={`Tên bài: ${problem.title}\n\nĐề bài:\n${problem.description}\n\nYêu cầu input:\n${problem.inputDescription}\n\nYêu cầu output:\n${problem.outputDescription}\n\nInput mẫu:\n${problem.sampleInput}\n\nOutput mẫu:\n${problem.sampleOutput}`}
                 onChange={(value) => {
                   updateDraft({ sourceCode: value })
                   setRunStatus(null)
@@ -525,7 +539,7 @@ export function ProblemWorkspace({ slug, onBack, onAccepted, submissionPolicy, d
               />
             </div>
 
-            <div className={`grid min-h-0 min-w-0 overflow-hidden bg-slate-950/90 dark-scroll [overflow-anchor:none] ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-[150px_minmax(0,1fr)]'}`}>
+            <div className={`grid h-full min-h-0 min-w-0 overflow-hidden bg-slate-950/90 dark-scroll [overflow-anchor:none] ${isSqlWorkspace ? 'grid-rows-1' : 'grid-rows-[150px_minmax(0,1fr)]'}`}>
               {/* Input test case */}
               {!isSqlWorkspace ? (
               <div className="flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-white/10">

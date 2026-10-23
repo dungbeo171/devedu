@@ -17,6 +17,34 @@ SELECT setval('user_public_id_seq', COALESCE((SELECT MAX(public_id) FROM users),
 ALTER TABLE users ALTER COLUMN public_id SET DEFAULT nextval('user_public_id_seq');
 ALTER TABLE users ALTER COLUMN public_id SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uk_users_public_id ON users (public_id);
+
+-- Pending email registrations are separate from users. A user account is only
+-- created after the six-digit code is verified successfully.
+CREATE TABLE IF NOT EXISTS registration_email_verifications (
+    email VARCHAR(254) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(60) NOT NULL,
+    code_hash VARCHAR(60) NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    resend_available_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_registration_email_verifications_expiry
+    ON registration_email_verifications (expires_at);
+
+-- Runtime product switches are persisted separately from SMTP credentials.
+-- Credentials remain environment-only; this flag lets an administrator pause
+-- registration email delivery without restarting the application.
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value VARCHAR(500) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+INSERT INTO system_settings (setting_key, setting_value, updated_at)
+VALUES ('registration_email_verification_enabled', 'true', CURRENT_TIMESTAMP)
+ON CONFLICT (setting_key) DO NOTHING;
+
 DROP INDEX IF EXISTS uk_users_student_code;
 DROP INDEX IF EXISTS uk_users_teacher_code;
 ALTER TABLE users DROP COLUMN IF EXISTS student_code;
@@ -27,7 +55,21 @@ DROP SEQUENCE IF EXISTS teacher_code_seq;
 -- Remove the retired Interview module and its legacy data.
 DROP TABLE IF EXISTS interview_questions;
 
--- Retired Exam tables are not created; existing historical data is retained.
+-- Retired Exam and Course/Lesson modules were explicitly removed from this product.
+-- Drop only their legacy tables, in foreign-key order and without CASCADE, so unrelated
+-- users, programming problems, submissions and Contest data cannot be removed implicitly.
+DROP TABLE IF EXISTS exam_answers;
+DROP TABLE IF EXISTS exam_question_options;
+DROP TABLE IF EXISTS exam_attempts;
+DROP TABLE IF EXISTS exam_questions;
+DROP TABLE IF EXISTS exams;
+DROP TABLE IF EXISTS lesson_progress;
+DROP TABLE IF EXISTS lessons;
+DROP TABLE IF EXISTS course_materials;
+DROP TABLE IF EXISTS course_problem_assignments;
+DROP TABLE IF EXISTS course_enrollments;
+DROP TABLE IF EXISTS course_topics;
+DROP TABLE IF EXISTS courses;
 
 
 CREATE TABLE IF NOT EXISTS programming_problems (
@@ -80,6 +122,19 @@ CREATE TABLE IF NOT EXISTS problem_run_statistics (
     successful_runs BIGINT NOT NULL DEFAULT 0 CHECK (successful_runs >= 0 AND successful_runs <= total_runs)
 );
 
+-- Aggregated first-party preferences for content-based Problem ordering.
+-- Only metadata weights are stored; source code and input are never copied here.
+CREATE TABLE IF NOT EXISTS problem_recommendation_signals (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    signal_type VARCHAR(20) NOT NULL CHECK (signal_type IN ('TOPIC', 'DIFFICULTY', 'LANGUAGE')),
+    signal_value VARCHAR(30) NOT NULL,
+    weight BIGINT NOT NULL DEFAULT 1 CHECK (weight BETWEEN 1 AND 1000000),
+    last_used_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (user_id, signal_type, signal_value)
+);
+CREATE INDEX IF NOT EXISTS idx_problem_recommendation_signals_user_time
+    ON problem_recommendation_signals (user_id, last_used_at DESC);
+
 ALTER TABLE problem_submissions ADD COLUMN IF NOT EXISTS diagnostic TEXT NOT NULL DEFAULT '';
 ALTER TABLE problem_submissions ADD COLUMN IF NOT EXISTS passed_tests INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE problem_submissions ADD COLUMN IF NOT EXISTS total_tests INTEGER NOT NULL DEFAULT 0;
@@ -119,7 +174,6 @@ CREATE TABLE IF NOT EXISTS contests (
     ends_at TIMESTAMP WITH TIME ZONE NOT NULL,
     duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 1 AND 10080),
     created_by UUID NOT NULL REFERENCES users(id),
-    rules TEXT NOT NULL DEFAULT '',
     CHECK (ends_at > starts_at)
 );
 CREATE TABLE IF NOT EXISTS contest_problems (
@@ -136,6 +190,22 @@ CREATE TABLE IF NOT EXISTS contest_registrations (
     registered_at TIMESTAMP WITH TIME ZONE NOT NULL,
     PRIMARY KEY (contest_id, user_id)
 );
+-- Optional camera MVP: observations only; no images, video, landmarks or scoring input.
+CREATE TABLE IF NOT EXISTS contest_camera_events (
+    contest_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    event_id UUID NOT NULL,
+    kind VARCHAR(30) NOT NULL,
+    received_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (contest_id, user_id, event_id),
+    FOREIGN KEY (contest_id, user_id) REFERENCES contest_registrations(contest_id, user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_contest_camera_participant_time ON contest_camera_events(contest_id,user_id,received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_contest_camera_retention ON contest_camera_events(received_at);
+ALTER TABLE contest_camera_events DROP CONSTRAINT IF EXISTS contest_camera_events_kind_check;
+ALTER TABLE contest_camera_events ADD CONSTRAINT contest_camera_events_kind_check
+    CHECK (kind IN ('MONITORING_STARTED','CAMERA_ACTIVE','LOOKING_AWAY','NO_FACE','TAB_HIDDEN','PROBLEM_COPIED','CONTENT_PASTED','SCREENSHOT_ATTEMPT','CAMERA_STOPPED'));
+
 CREATE TABLE IF NOT EXISTS contest_submissions (
     submission_id UUID PRIMARY KEY REFERENCES problem_submissions(id),
     contest_id UUID NOT NULL REFERENCES contests(id),
@@ -144,10 +214,32 @@ CREATE TABLE IF NOT EXISTS contest_submissions (
 CREATE INDEX IF NOT EXISTS idx_contests_schedule ON contests (starts_at, ends_at);
 CREATE INDEX IF NOT EXISTS idx_contest_registrations_user ON contest_registrations (user_id, contest_id);
 CREATE INDEX IF NOT EXISTS idx_contest_submissions_time ON contest_submissions (contest_id, received_at);
+ALTER TABLE contest_registrations ADD COLUMN IF NOT EXISTS attempt_started_at TIMESTAMP WITH TIME ZONE;
 
-ALTER TABLE contests ADD COLUMN IF NOT EXISTS rated BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS description VARCHAR(5000) NOT NULL DEFAULT '';
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS monitoring_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE contests ADD COLUMN IF NOT EXISTS difficulty VARCHAR(20) NOT NULL DEFAULT 'BEGINNER'
     CHECK (difficulty IN ('BEGINNER','INTERMEDIATE','ADVANCED'));
+-- Existing contests stay published. New contests are explicitly created as private drafts by the application.
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS published BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) NOT NULL DEFAULT 'PUBLIC'
+    CHECK (visibility IN ('PUBLIC','PRIVATE'));
+ALTER TABLE contests ADD COLUMN IF NOT EXISTS participation_mode VARCHAR(20) NOT NULL DEFAULT 'OPEN'
+    CHECK (participation_mode IN ('OPEN','RESTRICTED'));
+CREATE TABLE IF NOT EXISTS contest_proctors (
+    contest_id UUID NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (contest_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS contest_allowed_emails (
+    contest_id UUID NOT NULL REFERENCES contests(id) ON DELETE CASCADE,
+    email VARCHAR(254) NOT NULL,
+    PRIMARY KEY (contest_id, email)
+);
+CREATE INDEX IF NOT EXISTS idx_contest_proctors_user ON contest_proctors(user_id, contest_id);
+CREATE INDEX IF NOT EXISTS idx_contest_allowed_emails_email ON contest_allowed_emails(email, contest_id);
 CREATE TABLE IF NOT EXISTS virtual_contests (
     id UUID PRIMARY KEY, contest_id UUID NOT NULL REFERENCES contests(id), user_id UUID NOT NULL REFERENCES users(id),
     starts_at TIMESTAMPTZ NOT NULL, ends_at TIMESTAMPTZ NOT NULL CHECK (ends_at > starts_at)
@@ -155,6 +247,12 @@ CREATE TABLE IF NOT EXISTS virtual_contests (
 CREATE INDEX IF NOT EXISTS idx_virtual_contest_user ON virtual_contests(user_id, contest_id, starts_at DESC);
 ALTER TABLE contest_submissions ADD COLUMN IF NOT EXISTS virtual_id UUID REFERENCES virtual_contests(id);
 ALTER TABLE contest_submissions ADD COLUMN IF NOT EXISTS mode VARCHAR(10) NOT NULL DEFAULT 'OFFICIAL' CHECK (mode IN ('OFFICIAL','VIRTUAL'));
+-- Preserve pre-existing official results without treating virtual work as an official start.
+UPDATE contest_registrations r SET attempt_started_at=c.starts_at FROM contests c
+WHERE r.contest_id=c.id AND r.attempt_started_at IS NULL AND EXISTS (
+    SELECT 1 FROM contest_submissions cs JOIN problem_submissions ps ON ps.id=cs.submission_id
+    WHERE cs.contest_id=r.contest_id AND ps.student_id=r.user_id AND cs.mode='OFFICIAL'
+);
 CREATE INDEX IF NOT EXISTS idx_virtual_submissions ON contest_submissions(virtual_id, received_at);
 CREATE TABLE IF NOT EXISTS contest_submission_requests (
     scope_id UUID NOT NULL, user_id UUID NOT NULL REFERENCES users(id), request_key VARCHAR(100) NOT NULL,
@@ -170,16 +268,74 @@ CREATE TABLE IF NOT EXISTS contest_results (
     time_seconds BIGINT NOT NULL, standing TEXT NOT NULL, PRIMARY KEY(contest_id,user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_contest_results_user ON contest_results(user_id,contest_id);
-CREATE TABLE IF NOT EXISTS user_contest_ratings (
-    user_id UUID PRIMARY KEY REFERENCES users(id), rating INTEGER NOT NULL CHECK(rating >= 0), peak INTEGER NOT NULL CHECK(peak >= rating)
+-- Requested removal of Contest rating and organizer rules. Back up existing DB before upgrade.
+-- No CASCADE: preserve users, problems, submissions, standings and virtual attempts.
+DROP TABLE IF EXISTS rating_history;
+DROP TABLE IF EXISTS user_contest_ratings;
+ALTER TABLE contests DROP COLUMN IF EXISTS rated;
+ALTER TABLE contests DROP COLUMN IF EXISTS rules;
+
+-- Contest-owned problems are isolated from the public programming_problems catalog.
+-- contest_problems.problem_id can point to either the public catalog or this contest-owned table;
+-- ownership and membership are enforced atomically by the application layer.
+ALTER TABLE contest_problems DROP CONSTRAINT IF EXISTS contest_problems_problem_id_fkey;
+CREATE TABLE IF NOT EXISTS contest_problem_definitions (
+    id UUID PRIMARY KEY,
+    contest_id UUID NOT NULL REFERENCES contests(id),
+    slug VARCHAR(120) NOT NULL,
+    title VARCHAR(180) NOT NULL,
+    summary VARCHAR(500) NOT NULL,
+    description TEXT NOT NULL,
+    input_description TEXT NOT NULL,
+    output_description TEXT NOT NULL,
+    sample_input TEXT NOT NULL DEFAULT '',
+    sample_output TEXT NOT NULL DEFAULT '',
+    topic VARCHAR(30) NOT NULL CHECK (topic IN ('INTRODUCTION','CPP','JAVA','PYTHON','OOP','DATA_STRUCTURES','ALGORITHMS','SQL')),
+    difficulty VARCHAR(20) NOT NULL CHECK (difficulty IN ('EASY','MEDIUM','HARD')),
+    allowed_languages VARCHAR(100) NOT NULL,
+    starter_codes TEXT NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL,
+    UNIQUE(contest_id, slug),
+    UNIQUE(contest_id, id)
 );
-CREATE TABLE IF NOT EXISTS rating_history (
-    contest_id UUID NOT NULL, user_id UUID NOT NULL, previous_rating INTEGER NOT NULL, new_rating INTEGER NOT NULL,
-    rating_change INTEGER NOT NULL, calculated_at TIMESTAMPTZ NOT NULL,
-    PRIMARY KEY(contest_id,user_id), FOREIGN KEY(contest_id,user_id) REFERENCES contest_results(contest_id,user_id),
-    CHECK (new_rating >= 0 AND new_rating - previous_rating = rating_change)
+CREATE TABLE IF NOT EXISTS contest_problem_test_cases (
+    id UUID PRIMARY KEY,
+    problem_id UUID NOT NULL REFERENCES contest_problem_definitions(id) ON DELETE CASCADE,
+    input TEXT NOT NULL,
+    expected_output TEXT NOT NULL,
+    time_limit_ms INTEGER NOT NULL CHECK(time_limit_ms BETWEEN 100 AND 30000),
+    position INTEGER NOT NULL CHECK(position > 0),
+    UNIQUE(problem_id, position)
 );
-CREATE INDEX IF NOT EXISTS idx_rating_history_user ON rating_history(user_id,calculated_at);
+CREATE TABLE IF NOT EXISTS contest_local_submissions (
+    id UUID PRIMARY KEY,
+    contest_id UUID NOT NULL REFERENCES contests(id),
+    virtual_id UUID REFERENCES virtual_contests(id),
+    mode VARCHAR(10) NOT NULL CHECK(mode IN ('OFFICIAL','VIRTUAL')),
+    problem_id UUID NOT NULL REFERENCES contest_problem_definitions(id),
+    user_id UUID NOT NULL REFERENCES users(id),
+    language VARCHAR(20) NOT NULL CHECK(language IN ('CPP','JAVA','PYTHON','HTML','MYSQL')),
+    source_code TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL CHECK(status IN ('ACCEPTED','WRONG_ANSWER','COMPILE_ERROR','RUNTIME_ERROR','TIME_LIMIT')),
+    diagnostic TEXT NOT NULL DEFAULT '',
+    passed_tests INTEGER NOT NULL CHECK(passed_tests >= 0),
+    total_tests INTEGER NOT NULL CHECK(total_tests >= passed_tests),
+    execution_time_ms BIGINT NOT NULL CHECK(execution_time_ms >= 0),
+    received_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_contest_local_submissions_contest_time ON contest_local_submissions(contest_id,received_at);
+CREATE INDEX IF NOT EXISTS idx_contest_local_submissions_virtual_time ON contest_local_submissions(virtual_id,received_at);
+CREATE TABLE IF NOT EXISTS contest_local_submission_requests (
+    scope_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id),
+    request_key VARCHAR(100) NOT NULL,
+    request_hash VARCHAR(64) NOT NULL,
+    submission_id UUID NOT NULL REFERENCES contest_local_submissions(id),
+    PRIMARY KEY(scope_id,user_id,request_key)
+);
+UPDATE contest_finalizations
+SET snapshot = ((snapshot::jsonb - 'rules') #- '{contest,rated}')::text
+WHERE snapshot::jsonb ? 'rules' OR (snapshot::jsonb->'contest') ? 'rated';
 
 CREATE INDEX IF NOT EXISTS idx_programming_problems_title ON programming_problems (title);
 CREATE INDEX IF NOT EXISTS idx_programming_problems_topic_title ON programming_problems (topic, title);
@@ -3933,3 +4089,241 @@ SET input_description = 'Không có dữ liệu đầu vào từ stdin. Các câ
     sample_input = ''
 WHERE topic = 'SQL'
   AND id::text LIKE '10000000-0000-0000-0000-%';
+
+-- Learning documents and first-party recommendation signals.
+CREATE TABLE IF NOT EXISTS learning_documents (
+    id UUID PRIMARY KEY,
+    slug VARCHAR(140) NOT NULL UNIQUE,
+    title VARCHAR(220) NOT NULL,
+    summary VARCHAR(600) NOT NULL,
+    content TEXT NOT NULL,
+    tags VARCHAR(300) NOT NULL,
+    reading_minutes INTEGER NOT NULL CHECK (reading_minutes > 0),
+    priority INTEGER NOT NULL DEFAULT 0,
+    published BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS learning_document_views (
+    user_id UUID NOT NULL REFERENCES users(id),
+    document_id UUID NOT NULL REFERENCES learning_documents(id),
+    view_count BIGINT NOT NULL DEFAULT 1 CHECK (view_count > 0),
+    last_viewed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (user_id, document_id)
+);
+
+CREATE TABLE IF NOT EXISTS learning_document_editor_permissions (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    granted_at TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_document_views_user_last
+    ON learning_document_views (user_id, last_viewed_at DESC);
+
+INSERT INTO learning_documents
+    (id, slug, title, summary, content, tags, reading_minutes, priority, published, created_at)
+VALUES
+('d0000000-0000-0000-0000-000000000001', 'lo-trinh-java-core-tu-co-ban',
+ 'Lộ trình Java Core từ cơ bản đến vững chắc',
+ 'Một lộ trình thực hành Java có thứ tự, tập trung vào nền tảng cần thiết trước khi học Spring Boot.',
+ E'## Bắt đầu từ mô hình thực thi
+Java biên dịch mã nguồn thành bytecode và JVM thực thi bytecode đó. Hãy hiểu vai trò của JDK, JVM, classpath và phương thức main trước khi dùng framework. Khi gặp lỗi, đọc loại lỗi, tên file và số dòng thay vì thử sửa ngẫu nhiên.
+
+## Nền tảng ngôn ngữ
+- Kiểu dữ liệu, biến, toán tử và ép kiểu.
+- Điều kiện, vòng lặp, phương thức và phạm vi biến.
+- Mảng, String và cách dữ liệu được truyền vào phương thức.
+
+## Học OOP đúng thời điểm
+Sau khi viết được chương trình thủ tục nhỏ, chuyển sang class, object, constructor, đóng gói, kế thừa và đa hình. Mỗi khái niệm nên đi kèm một bài toán: tài khoản ngân hàng, thư viện sách hoặc quản lý đơn hàng.
+
+## Collections và xử lý lỗi
+Nắm List, Set, Map, generic, equals/hashCode và cách chọn cấu trúc phù hợp. Tiếp theo học exception, try-with-resources và cách tạo thông báo lỗi có ích.
+
+## Kế hoạch thực hành
+Mỗi ngày dành một nửa thời gian đọc, một nửa thời gian tự gõ code. Hoàn thành bài nhỏ trước, viết test thủ công với nhiều input, sau đó mới chuyển sang Stream, lambda, I/O và concurrency cơ bản.',
+ 'JAVA,OOP,BEGINNER,INTRODUCTION', 8, 100, TRUE, TIMESTAMPTZ '2026-10-23 00:00:00+07'),
+
+('d0000000-0000-0000-0000-000000000002', 'python-tu-co-ban-den-giai-thuat',
+ 'Python từ cú pháp cơ bản đến giải thuật',
+ 'Học Python theo hướng giải quyết vấn đề, tránh phụ thuộc vào việc ghi nhớ cú pháp rời rạc.',
+ E'## Tư duy trước cú pháp
+Python ngắn gọn nhưng vẫn cần mô hình dữ liệu rõ ràng. Trước mỗi bài, hãy xác định input, output, trường hợp biên và độ phức tạp mong muốn.
+
+## Các phần cần nắm
+- Số, chuỗi, list, tuple, set và dictionary.
+- Điều kiện, vòng lặp, hàm, tham số và giá trị trả về.
+- Slicing, comprehension và cách tránh thay đổi dữ liệu ngoài ý muốn.
+
+## Chuyển sang giải thuật
+Bắt đầu với duyệt mảng, đếm tần suất và two pointers. Sau đó học stack, queue, binary search, đệ quy, cây và đồ thị. Với mỗi kỹ thuật, tự viết lại mà không nhìn lời giải.
+
+## Viết Python rõ ràng
+Đặt tên theo ý nghĩa, tách hàm ngắn và tránh biểu thức một dòng quá phức tạp. Dùng print để quan sát trạng thái khi học, sau đó bỏ log trước khi nộp.
+
+## Bài tập đề xuất
+Làm lần lượt tổng mảng, kiểm tra palindrome, đếm ký tự, tìm kiếm nhị phân và đường đi ngắn trên lưới. Ghi lại lỗi sai sau mỗi bài để tạo danh sách ôn tập cá nhân.',
+ 'PYTHON,ALGORITHMS,DATA_STRUCTURES,BEGINNER', 7, 96, TRUE, TIMESTAMPTZ '2026-10-23 00:01:00+07'),
+
+('d0000000-0000-0000-0000-000000000003', 'cpp-cho-lap-trinh-thi-dau',
+ 'C++ nền tảng cho lập trình thi đấu',
+ 'Những phần C++ cần ưu tiên để giải bài nhanh, an toàn và kiểm soát tốt độ phức tạp.',
+ E'## Bộ công cụ tối thiểu
+Nắm chắc kiểu số, string, vector, pair, map, set, stack, queue và priority_queue. Hiểu tham chiếu, const và phạm vi biến để tránh sao chép dữ liệu không cần thiết.
+
+## STL theo mục đích
+- sort và comparator cho sắp xếp.
+- lower_bound, upper_bound cho tìm kiếm trên dữ liệu đã sắp xếp.
+- unordered_map cho đếm tần suất khi không cần thứ tự.
+- deque và priority_queue cho cửa sổ trượt hoặc chọn phần tử tốt nhất.
+
+## An toàn dữ liệu
+Dùng long long khi tổng hoặc tích có thể vượt int. Luôn kiểm tra chỉ số mảng, trường hợp rỗng và điều kiện dừng của đệ quy.
+
+## Quy trình trong cuộc thi
+Đọc toàn bộ đề, ước lượng độ phức tạp từ giới hạn, viết ý tưởng ngắn rồi mới code. Chạy bằng ví dụ nhỏ tự tạo, trường hợp nhỏ nhất và trường hợp có phần tử trùng.
+
+## Thứ tự luyện tập
+Ưu tiên mảng và chuỗi, sorting, binary search, prefix sum, two pointers, graph traversal rồi dynamic programming. Không học template dài trước khi hiểu vì sao nó đúng.',
+ 'CPP,ALGORITHMS,DATA_STRUCTURES', 7, 92, TRUE, TIMESTAMPTZ '2026-10-23 00:02:00+07'),
+
+('d0000000-0000-0000-0000-000000000004', 'oop-tu-duy-thiet-ke-doi-tuong',
+ 'OOP: tư duy thiết kế đối tượng dễ bảo trì',
+ 'Hiểu đóng gói, abstraction, kế thừa và đa hình thông qua trách nhiệm của đối tượng.',
+ E'## Bắt đầu từ trách nhiệm
+Một class tốt đại diện cho một khái niệm rõ ràng và chịu trách nhiệm cho một nhóm hành vi liên quan. Đừng tạo class chỉ để chứa dữ liệu nếu dữ liệu đó có quy tắc nghiệp vụ riêng.
+
+## Đóng gói
+Giữ trạng thái hợp lệ bên trong object. Thay vì cho phép sửa số dư trực tiếp, cung cấp phương thức nạp hoặc rút tiền và kiểm tra điều kiện ngay tại đó.
+
+## Kế thừa và composition
+Chỉ dùng kế thừa khi quan hệ thực sự là “một loại của”. Trong nhiều trường hợp, ghép các object nhỏ bằng composition giúp thay đổi dễ hơn và giảm phụ thuộc.
+
+## Đa hình
+Lập trình dựa trên interface để phần gọi không phụ thuộc implementation cụ thể. Ví dụ PaymentService làm việc với PaymentGateway thay vì gắn chặt với một nhà cung cấp.
+
+## Bài tập thiết kế
+Thiết kế hệ thống thư viện gồm Book, Member và Loan. Viết rõ invariant, hành vi và ranh giới của từng object trước khi thêm repository hoặc controller.',
+ 'OOP,JAVA,CPP', 6, 88, TRUE, TIMESTAMPTZ '2026-10-23 00:03:00+07'),
+
+('d0000000-0000-0000-0000-000000000005', 'cau-truc-du-lieu-can-nam-vung',
+ 'Các cấu trúc dữ liệu cần nắm vững',
+ 'Cách chọn array, hash table, stack, queue, tree và graph dựa trên thao tác cần tối ưu.',
+ E'## Chọn theo thao tác
+Đừng chọn cấu trúc dữ liệu theo thói quen. Hãy liệt kê thao tác chính: truy cập theo chỉ số, tìm kiếm, thêm xóa, lấy phần tử nhỏ nhất hay duyệt quan hệ.
+
+## Nhóm tuyến tính
+Array và vector phù hợp khi cần truy cập nhanh theo vị trí. Linked list hữu ích khi đã có vị trí node và cần nối cắt, nhưng thường không tối ưu cache như array. Stack xử lý quan hệ vào sau ra trước; queue xử lý vào trước ra trước.
+
+## Hash và cây
+Hash table cho tra cứu trung bình gần O(1), nhưng không giữ thứ tự. Balanced tree thường O(log n) và phù hợp khi cần thứ tự hoặc truy vấn khoảng.
+
+## Graph
+Graph biểu diễn mạng lưới quan hệ. Adjacency list tiết kiệm bộ nhớ với graph thưa. BFS phù hợp đường đi ngắn không trọng số; DFS phù hợp khám phá thành phần, cycle và thứ tự phụ thuộc.
+
+## Cách học
+Tự cài đặt phiên bản đơn giản, sau đó dùng thư viện chuẩn. So sánh độ phức tạp thời gian, bộ nhớ và viết một bài toán thực tế cho từng cấu trúc.',
+ 'DATA_STRUCTURES,ALGORITHMS,CPP,JAVA,PYTHON', 8, 84, TRUE, TIMESTAMPTZ '2026-10-23 00:04:00+07'),
+
+('d0000000-0000-0000-0000-000000000006', 'lo-trinh-luyen-thuat-toan',
+ 'Lộ trình luyện thuật toán không bị ngợp',
+ 'Một thứ tự học có chủ đích, cách dùng bài tập và cách ôn lại để tiến bộ bền vững.',
+ E'## Chia nhỏ lộ trình
+Bắt đầu bằng độ phức tạp, mảng, chuỗi và sorting. Tiếp theo là prefix sum, two pointers, sliding window, binary search, stack và queue. Sau đó học tree, graph, greedy và dynamic programming.
+
+## Chu trình giải một bài
+1. Viết lại yêu cầu bằng lời của bạn.
+2. Tạo hai ví dụ nhỏ và trường hợp biên.
+3. Viết lời giải đơn giản trước.
+4. Xác định nút thắt và tối ưu.
+5. Sau khi Accepted, ghi lại mẫu tư duy đã dùng.
+
+## Khi nào xem gợi ý
+Đặt giới hạn 25–40 phút tùy độ khó. Nếu chưa có hướng, xem một gợi ý nhỏ, đóng lại và tự triển khai. Không đọc toàn bộ lời giải rồi chép code.
+
+## Ôn tập ngắt quãng
+Làm lại bài sau 1 ngày, 1 tuần và 1 tháng. Nếu vẫn cần nhìn đáp án, bài đó chưa trở thành kỹ năng của bạn.
+
+## Đo tiến bộ
+Theo dõi số bài tự giải được, thời gian tìm ra ý tưởng và loại lỗi thường gặp. Số bài đã mở không quan trọng bằng số bài có thể giải lại.',
+ 'ALGORITHMS,DATA_STRUCTURES,LEARNING', 7, 80, TRUE, TIMESTAMPTZ '2026-10-23 00:05:00+07'),
+
+('d0000000-0000-0000-0000-000000000007', 'sql-tu-truy-van-den-thiet-ke',
+ 'SQL từ truy vấn đến thiết kế dữ liệu',
+ 'Học SQL theo luồng đọc dữ liệu, kết hợp bảng, tổng hợp và thiết kế schema có chủ đích.',
+ E'## Truy vấn dữ liệu
+Bắt đầu với SELECT, WHERE, ORDER BY và LIMIT. Luôn xác định rõ mỗi hàng trong kết quả đại diện cho điều gì trước khi thêm nhiều cột.
+
+## Kết hợp bảng
+Hiểu INNER JOIN và LEFT JOIN bằng quan hệ khóa chính–khóa ngoại. Khi kết quả bị nhân bản, kiểm tra cardinality thay vì thêm DISTINCT để che nguyên nhân.
+
+## Tổng hợp
+GROUP BY gom các hàng theo khóa; hàm COUNT, SUM, AVG tính trên từng nhóm. Phân biệt điều kiện trước tổng hợp trong WHERE và sau tổng hợp trong HAVING.
+
+## Thiết kế schema
+Chọn kiểu dữ liệu chính xác, đặt NOT NULL khi nghiệp vụ yêu cầu và tạo constraint để database bảo vệ tính đúng. Index nên phục vụ truy vấn thực tế, không tạo cho mọi cột.
+
+## Thực hành
+Thiết kế dữ liệu cho cửa hàng gồm customer, product, order và order_item. Viết truy vấn doanh thu theo tháng, khách hàng chưa mua và sản phẩm bán chạy.',
+ 'SQL,DATABASE,DATA_STRUCTURES', 7, 76, TRUE, TIMESTAMPTZ '2026-10-23 00:06:00+07'),
+
+('d0000000-0000-0000-0000-000000000008', 'web-html-css-javascript-nen-tang',
+ 'Web nền tảng với HTML, CSS và JavaScript',
+ 'Hiểu vai trò của ba lớp nền tảng web trước khi bước vào React hoặc framework giao diện.',
+ E'## HTML tạo cấu trúc
+Dùng thẻ semantic như header, nav, main, section, article và button. Cấu trúc đúng giúp accessibility, SEO và việc bảo trì dễ hơn.
+
+## CSS tạo bố cục
+Nắm box model, cascade, specificity, flexbox, grid và responsive. Thiết kế mobile trước giúp bạn nhìn ra nội dung quan trọng và tránh phụ thuộc kích thước cố định.
+
+## JavaScript tạo hành vi
+Học biến, hàm, array, object, DOM event, module và async/await. Phân biệt trạng thái dữ liệu với cách nó được hiển thị trên giao diện.
+
+## An toàn cơ bản
+Không đưa secret vào frontend. Không chèn dữ liệu người dùng bằng innerHTML nếu chưa xử lý. Hiểu same-origin, CORS và vì sao validation phía client không thay thế backend.
+
+## Dự án luyện tập
+Tạo ứng dụng ghi chú có tìm kiếm, lọc và lưu localStorage. Sau đó tách code thành module, thêm trạng thái loading/error và kiểm tra trên màn hình nhỏ.',
+ 'HTML,WEB,JAVASCRIPT,BEGINNER', 7, 72, TRUE, TIMESTAMPTZ '2026-10-23 00:07:00+07'),
+
+('d0000000-0000-0000-0000-000000000009', 'hoc-lap-trinh-hieu-qua',
+ 'Cách học lập trình hiệu quả và bền vững',
+ 'Một hệ thống học tập cân bằng giữa kiến thức, thực hành, phản hồi và ôn tập.',
+ E'## Học chủ động
+Sau mỗi khái niệm, đóng tài liệu và tự giải thích bằng lời của bạn. Nếu không thể đưa ra ví dụ hoặc viết đoạn code nhỏ, kiến thức vẫn đang ở mức nhận biết.
+
+## Phiên học tập trung
+Chọn một mục tiêu cụ thể cho 45–90 phút, ví dụ “giải được bài two pointers mức dễ”. Tắt thông báo, chuẩn bị input kiểm thử và ghi lại câu hỏi phát sinh.
+
+## Nhật ký lỗi
+Ghi lỗi theo bốn nhóm: hiểu sai đề, sai thuật toán, sai cú pháp và thiếu trường hợp biên. Mỗi tuần xem lại nhóm xuất hiện nhiều nhất để điều chỉnh cách luyện.
+
+## Dự án và bài tập
+Bài tập rèn kỹ thuật nhỏ; dự án rèn cách kết nối nhiều phần. Duy trì cả hai. Một dự án nhỏ hoàn thiện tốt có giá trị hơn nhiều dự án chỉ làm phần giao diện đầu tiên.
+
+## Tránh học thụ động
+Video và tài liệu chỉ là đầu vào. Tiến bộ đến từ việc dự đoán kết quả, tự viết code, nhận lỗi, sửa lỗi và giải lại sau một khoảng thời gian.',
+ 'LEARNING,BEGINNER,INTRODUCTION', 6, 68, TRUE, TIMESTAMPTZ '2026-10-23 00:08:00+07'),
+
+('d0000000-0000-0000-0000-000000000010', 'debug-code-co-he-thong',
+ 'Debug code có hệ thống thay vì đoán',
+ 'Quy trình tìm lỗi từ tái hiện, thu hẹp phạm vi đến xác nhận nguyên nhân và ngăn lỗi quay lại.',
+ E'## Tái hiện ổn định
+Viết input nhỏ nhất vẫn tạo ra lỗi. Ghi rõ kết quả mong đợi và kết quả thực tế. Nếu lỗi không tái hiện ổn định, chưa nên sửa theo phỏng đoán.
+
+## Thu hẹp phạm vi
+Chia chương trình thành các bước và kiểm tra invariant sau từng bước. Dùng log có mục đích hoặc debugger để quan sát giá trị quan trọng, không in toàn bộ trạng thái.
+
+## Phân loại lỗi
+- Compile error: đọc thông báo đầu tiên và vị trí liên quan.
+- Runtime error: kiểm tra null, chỉ số, chia cho zero và recursion.
+- Wrong answer: so sánh từng bước với ví dụ nhỏ.
+- Time limit: đo độ phức tạp và tìm thao tác lặp lại không cần thiết.
+
+## Xác nhận bản sửa
+Chạy lại input gây lỗi, trường hợp biên và một trường hợp bình thường. Đừng coi việc “không còn lỗi” là đủ nếu chưa chứng minh output đúng.
+
+## Ngăn lỗi quay lại
+Giữ test case tái hiện lỗi trong bộ kiểm thử. Ghi một câu mô tả nguyên nhân gốc để lần sau nhận ra cùng mẫu lỗi nhanh hơn.',
+ 'LEARNING,JAVA,PYTHON,CPP,ALGORITHMS', 6, 64, TRUE, TIMESTAMPTZ '2026-10-23 00:09:00+07')
+ON CONFLICT (id) DO NOTHING;

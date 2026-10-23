@@ -61,6 +61,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(
                                 "/api/auth/register",
+                                "/api/auth/register/verify",
                                 "/api/auth/login",
                                 "/api/auth/oauth/providers",
                                 "/oauth2/authorization/*",
@@ -70,13 +71,17 @@ public class SecurityConfiguration {
                                 "/error"
                         )
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/leaderboards/problems").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/recommendations", "/api/documents/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/documents/*/views").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/problems", "/api/problems/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/contests", "/api/contests/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/contests/*/results", "/api/profiles/*/contests").permitAll()
                         .requestMatchers("/api/contests/*/virtual", "/api/contests/*/virtual/*/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/contests/*/registration", "/api/contests/*/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/contests/*/registration", "/api/contests/*/attempt", "/api/contests/*/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/problems/*/submissions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/problems/*/runs").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/code/suggestions").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/student/problem-progress").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/student/problems/*/draft").hasAnyRole("STUDENT", "TEACHER", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/student/problems/*/draft").hasAnyRole("STUDENT", "TEACHER", "ADMIN")

@@ -31,4 +31,11 @@ public class ContestExperienceController {
         var s=contests.submitVirtual(id,sessionId,problemId,body.language(),body.sourceCode(),requestKey,user);
         return response(new ProblemSubmissionResponse(s.id(),s.problemId(),s.language(),s.status(),s.diagnostic(),s.passedTests(),s.totalTests(),s.executionTimeMillis(),s.submittedAt()));
     }
+    @PostMapping("/api/contests/{id}/virtual/{sessionId}/problems/{problemId}/runs")
+    public ResponseEntity<ProblemTestRunResponse> run(@PathVariable UUID id,@PathVariable UUID sessionId,@PathVariable UUID problemId,
+            @RequestBody SubmitProblemRequest body,@AuthenticationPrincipal AuthenticatedUser user) {
+        var result=contests.runVirtual(id,sessionId,problemId,body.language(),body.sourceCode(),user);
+        return response(new ProblemTestRunResponse(result.status(),result.diagnostic(),result.passedTests(),result.totalTests(),result.executionTimeMillis(),
+                result.testCases().stream().map(test -> new ProblemTestCaseResultResponse(test.position(),test.passed(),test.status(),test.position()==1?test.actualOutput():null)).toList()));
+    }
 }

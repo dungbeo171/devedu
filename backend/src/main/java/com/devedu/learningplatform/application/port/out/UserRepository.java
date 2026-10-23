@@ -1,6 +1,7 @@
 package com.devedu.learningplatform.application.port.out;
 
 import com.devedu.learningplatform.domain.model.User;
+import com.devedu.learningplatform.domain.model.UserRole;
 
 import java.util.Optional;
 import java.util.List;
@@ -35,6 +36,15 @@ public interface UserRepository {
                         || (user.studentCode() != null && user.studentCode().toLowerCase(java.util.Locale.ROOT).contains(normalized)))
                 .limit(limit)
                 .toList();
+    }
+
+    default List<User> searchByRole(UserRole role, String query, int limit) {
+        var normalized = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
+        return findAll().stream().filter(user -> user.role() == role)
+                .filter(user -> normalized.isBlank()
+                        || user.name().toLowerCase(java.util.Locale.ROOT).contains(normalized)
+                        || user.email().toLowerCase(java.util.Locale.ROOT).contains(normalized))
+                .limit(limit).toList();
     }
 
     User save(User user);

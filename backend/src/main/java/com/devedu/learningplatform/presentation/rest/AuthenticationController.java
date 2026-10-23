@@ -4,12 +4,15 @@ import com.devedu.learningplatform.application.port.in.AuthenticationUseCase;
 import com.devedu.learningplatform.application.port.in.ListExternalAuthProvidersUseCase;
 import com.devedu.learningplatform.application.port.in.command.LoginCommand;
 import com.devedu.learningplatform.application.port.in.command.RegisterUserCommand;
+import com.devedu.learningplatform.application.port.in.command.VerifyRegistrationCommand;
 import com.devedu.learningplatform.application.port.in.result.AuthenticationResult;
 import com.devedu.learningplatform.presentation.rest.dto.AuthenticationResponse;
 import com.devedu.learningplatform.presentation.rest.dto.OAuthProvidersResponse;
 import com.devedu.learningplatform.presentation.rest.dto.LoginRequest;
 import com.devedu.learningplatform.presentation.rest.dto.RegisterRequest;
+import com.devedu.learningplatform.presentation.rest.dto.RegistrationVerificationResponse;
 import com.devedu.learningplatform.presentation.rest.dto.UserResponse;
+import com.devedu.learningplatform.presentation.rest.dto.VerifyRegistrationRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -37,8 +40,24 @@ public class AuthenticationController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<RegistrationVerificationResponse> register(@RequestBody RegisterRequest request) {
         var result = authenticationUseCase.register(new RegisterUserCommand(request.name(), request.email(), request.password()));
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .cacheControl(CacheControl.noStore())
+                .body(new RegistrationVerificationResponse(
+                        result.email(),
+                        result.expiresInSeconds(),
+                        result.resendAfterSeconds()
+                ));
+    }
+
+    @PostMapping("/register/verify")
+    public ResponseEntity<AuthenticationResponse> verifyRegistration(
+            @RequestBody VerifyRegistrationRequest request
+    ) {
+        var result = authenticationUseCase.verifyRegistration(
+                new VerifyRegistrationCommand(request.email(), request.code())
+        );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .cacheControl(CacheControl.noStore())
                 .body(toResponse(result));

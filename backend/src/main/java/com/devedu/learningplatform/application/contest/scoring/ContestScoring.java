@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 public final class ContestScoring {
     public ContestViews.ScoringRules rules() {
         return new ContestViews.ScoringRules("Points / last solve", "Mỗi bài Accepted được cộng toàn bộ điểm một lần.",
-                "Không cộng thời gian phạt cho lượt sai. Cột Time là thời gian giải bài cuối cùng kể từ lúc bắt đầu.",
+                "Không cộng thời gian phạt cho lượt sai. Thời gian giải tính từ lúc người tham gia bắt đầu làm bài.",
                 "Điểm giảm dần, thời gian giải bài cuối cùng tăng dần, sau đó ID người dùng công khai tăng dần.",
                 0, null, true);
     }
@@ -32,7 +32,7 @@ public final class ContestScoring {
                 Long solvedAt = null;
                 for (var entry : attempts) {
                     if (entry.status() == SubmissionStatus.ACCEPTED) {
-                        solvedAt = Math.max(0, Duration.between(contest.startsAt(), entry.receivedAt()).getSeconds());
+                        solvedAt = Math.max(0, Duration.between(person.startedAt() == null ? contest.startsAt() : person.startedAt(), entry.receivedAt()).getSeconds());
                         break;
                     }
                     if (entry.status() != SubmissionStatus.NOT_JUDGED) wrong++;

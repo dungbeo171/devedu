@@ -14,6 +14,8 @@ import com.devedu.learningplatform.presentation.rest.dto.ProgrammingProblemSumma
 import com.devedu.learningplatform.presentation.rest.dto.SubmitProblemRequest;
 import com.devedu.learningplatform.presentation.rest.dto.ProblemTestCaseResultResponse;
 import com.devedu.learningplatform.presentation.rest.dto.ProblemTestRunResponse;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationUseCase;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,20 +33,40 @@ import java.util.List;
 public class ProgrammingProblemsController {
 
     private final ProgrammingProblemsUseCase programmingProblemsUseCase;
+    private final ProblemRecommendationUseCase problemRecommendationUseCase;
 
-    public ProgrammingProblemsController(ProgrammingProblemsUseCase programmingProblemsUseCase) {
+    public ProgrammingProblemsController(
+            ProgrammingProblemsUseCase programmingProblemsUseCase,
+            ProblemRecommendationUseCase problemRecommendationUseCase
+    ) {
         this.programmingProblemsUseCase = programmingProblemsUseCase;
+        this.problemRecommendationUseCase = problemRecommendationUseCase;
     }
 
     @GetMapping
-    public List<ProgrammingProblemSummaryResponse> list(
+    public ResponseEntity<List<ProgrammingProblemSummaryResponse>> list(
             @RequestParam(required = false) ProblemTopic topic,
             @RequestParam(required = false) ProblemDifficulty difficulty,
-            @RequestParam(required = false) CodeLanguage language
+            @RequestParam(required = false) CodeLanguage language,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return programmingProblemsUseCase.list(topic, difficulty, language).stream()
-                .map(this::toSummaryResponse)
+        var result = user == null
+                ? programmingProblemsUseCase.list(topic, difficulty, language).stream()
+                        .map(this::toSummaryResponse)
+                        .toList()
+                : problemRecommendationUseCase.recommend(user.id(), topic, difficulty, language).stream()
+                .map(item -> {
+                    var problem = item.problem();
+                    return new ProgrammingProblemSummaryResponse(
+                            problem.id(), problem.slug(), problem.title(), problem.summary(),
+                            problem.topic(), problem.difficulty(), problem.allowedLanguages(),
+                            item.acceptanceRate()
+                    );
+                })
                 .toList();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(result);
     }
 
     @GetMapping("/{slug}")
@@ -93,10 +115,11 @@ public class ProgrammingProblemsController {
     @PostMapping("/{slug}/runs")
     public ProblemTestRunResponse runTests(
             @PathVariable String slug,
-            @RequestBody SubmitProblemRequest request
+            @RequestBody SubmitProblemRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
         var result = programmingProblemsUseCase.runTests(
-                new RunProblemTestsCommand(slug, request.language(), request.sourceCode())
+                new RunProblemTestsCommand(slug, request.language(), request.sourceCode(), user.id())
         );
         return new ProblemTestRunResponse(
                 result.status(),

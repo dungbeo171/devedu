@@ -5,6 +5,10 @@ import { ContestDetailPage } from '../features/contest/components/ContestDetailP
 import { ContestResultPage } from '../features/contest/components/ContestResultPage'
 import { VirtualContestPage } from '../features/contest/components/VirtualContestPage'
 import { ContestProfilePage } from '../features/contest/components/ContestProfilePage'
+import { CreateContestPage } from '../features/contest/components/CreateContestPage'
+import { ContestEditPage } from '../features/contest/components/ContestEditPage'
+import { ContestAdminPage } from '../features/contest/components/ContestAdminPage'
+import { ContestMonitoringPage } from '../features/contest/components/ContestMonitoringPage'
 import { ProgrammingProblems } from '../features/programming-problems/components/ProgrammingProblems'
 import { AddProgrammingProblemPage } from '../features/programming-problems/components/AddProgrammingProblemPage'
 import { EditProgrammingProblemPage } from '../features/programming-problems/components/EditProgrammingProblemPage'
@@ -12,10 +16,16 @@ import { AuthPage } from '../features/auth/components/AuthPage'
 import { OAuthCallbackPage } from '../features/auth/components/OAuthCallbackPage'
 import { clearAuthentication, getStoredUser } from '../features/auth/api/authApi'
 import { AdminUsersPage } from '../features/admin-users/components/AdminUsersPage'
+import { AdminAnalyticsPage } from '../features/admin-analytics/components/AdminAnalyticsPage'
+import { ProblemLeaderboardPage } from '../features/leaderboard/components/ProblemLeaderboardPage'
+import { LearningDocumentsPage } from '../features/documents/components/LearningDocumentsPage'
+import { LearningDocumentPage } from '../features/documents/components/LearningDocumentPage'
+import { EditLearningDocumentPage } from '../features/documents/components/EditLearningDocumentPage'
 import { FlashToast } from '../shared/components/FlashToast'
 import { setPendingFlash, takePendingFlash } from '../shared/flashMessage'
 import {
   IconArrowLeft,
+  IconBookOpen,
   IconChevronDown,
   IconCode,
   IconLogOut,
@@ -35,20 +45,32 @@ interface RouteDefinition {
 const navigationRoutes: RouteDefinition[] = [
   { path: '/', label: 'Trình biên dịch', title: 'Trình biên dịch · DevEdu', content: <CodeCompiler />, icon: IconTerminal },
   { path: '/problems', label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems />, icon: IconCode },
-  { path: '/contests', label: 'Contests', title: 'Contests · DevEdu', content: <ContestListPage />, icon: IconTrophy },
+  { path: '/leaderboard', label: 'Xếp hạng', title: 'Bảng xếp hạng · DevEdu', content: <ProblemLeaderboardPage />, icon: IconTrophy },
+  { path: '/documents', label: 'Tài liệu', title: 'Tài liệu · DevEdu', content: <LearningDocumentsPage />, icon: IconBookOpen },
+  { path: '/contests', label: 'Cuộc thi', title: 'Cuộc thi · DevEdu', content: <ContestListPage />, icon: IconTrophy },
 ]
 
-const adminRoute: RouteDefinition = {
-  path: '/admin/users',
-  label: 'Quản trị',
-  title: 'Quản lý người dùng · DevEdu',
-  content: <AdminUsersPage />,
+const managementRoute: RouteDefinition = {
+  path: '/admin',
+  label: 'Quản lý',
+  title: 'Quản lý kỳ thi · DevEdu',
+  content: <ContestAdminPage />,
   icon: IconShield,
+}
+
+const adminUsersRoute: RouteDefinition = {
+  path: '/admin/users', label: 'Quản lý tài khoản', title: 'Quản lý người dùng · DevEdu', content: <AdminUsersPage />, icon: IconShield,
+}
+
+const adminStatisticsRoute: RouteDefinition = {
+  path: '/admin/statistics', label: 'Thống kê', title: 'Thống kê hệ thống · DevEdu', content: <AdminAnalyticsPage />, icon: IconShield,
 }
 
 const routes: RouteDefinition[] = [
   ...navigationRoutes,
-  adminRoute,
+  managementRoute,
+  adminStatisticsRoute,
+  adminUsersRoute,
   { path: '/login', label: 'Đăng nhập', title: 'Đăng nhập · DevEdu', content: <AuthPage mode="login" />, icon: IconCode },
   { path: '/register', label: 'Đăng ký', title: 'Đăng ký · DevEdu', content: <AuthPage mode="register" />, icon: IconCode },
   { path: '/auth/callback', label: 'OAuth', title: 'Đăng nhập · DevEdu', content: <OAuthCallbackPage />, icon: IconCode },
@@ -64,18 +86,30 @@ export function App() {
   const [flashMessage, setFlashMessage] = useState(takePendingFlash)
   const problemSlug = problemSlugFromPath(pathname)
   const editProblemSlug = editProblemSlugFromPath(pathname)
-  const contestId = pathname.match(/^\/contests\/([^/]+)(?:\/(?:leaderboard|submissions|rules|results|virtual|problems\/[^/]+))?$/)?.[1]
-  const profileRoute = pathname.match(/^\/profile\/(user--?\d+)\/(contests|rating)$/)
-  const route = pathname === '/problems/add'
+  const contestEditId = pathname.match(/^\/contests\/([^/]+)\/edit$/)?.[1]
+  const contestId = pathname.match(/^\/contests\/([^/]+)(?:\/(?:leaderboard|submissions|results|virtual|problems\/[^/]+))?$/)?.[1]
+  const contestMonitoring = Boolean(contestId && new URLSearchParams(window.location.search).get('monitoring') === '1')
+  const profileRoute = pathname.match(/^\/profile\/(user--?\d+)\/contests$/)
+  const editDocumentSlug = editDocumentSlugFromPath(pathname)
+  const documentSlug = documentSlugFromPath(pathname)
+  const route = editDocumentSlug
+    ? { path: pathname, label: 'Chỉnh sửa tài liệu', title: 'Chỉnh sửa tài liệu · DevEdu', content: <EditLearningDocumentPage slug={editDocumentSlug} />, icon: IconBookOpen }
+    : documentSlug
+    ? { path: pathname, label: 'Tài liệu', title: 'Tài liệu · DevEdu', content: <LearningDocumentPage slug={documentSlug} />, icon: IconBookOpen }
+    : pathname === '/problems/add'
     ? { path: pathname, label: 'Thêm bài tập', title: 'Thêm bài tập · DevEdu', content: <AddProgrammingProblemPage />, icon: IconCode }
     : editProblemSlug
     ? { path: pathname, label: 'Sửa bài tập', title: 'Sửa bài tập · DevEdu', content: <EditProgrammingProblemPage slug={editProblemSlug} />, icon: IconCode }
     : problemSlug
     ? { path: pathname, label: 'Bài tập', title: 'Bài tập · DevEdu', content: <ProgrammingProblems slug={problemSlug} />, icon: IconCode }
-    : contestId
-    ? { path: pathname, label: 'Contest', title: 'Contest · DevEdu', content: pathname.endsWith('/results') ? <ContestResultPage contestId={contestId} /> : pathname.endsWith('/virtual') ? <VirtualContestPage contestId={contestId} /> : <ContestDetailPage contestId={contestId} />, icon: IconTrophy }
+    : pathname === '/contests/create'
+    ? { path: pathname, label: 'Tạo cuộc thi', title: 'Tạo cuộc thi · DevEdu', content: <CreateContestPage />, icon: IconTrophy }
+    : contestEditId
+    ? { path: pathname, label: 'Chỉnh sửa cuộc thi', title: 'Chỉnh sửa cuộc thi · DevEdu', content: <ContestEditPage contestId={contestEditId} />, icon: IconTrophy }
+    : contestId && contestId !== 'create'
+    ? { path: pathname, label: contestMonitoring ? 'Giám sát' : 'Cuộc thi', title: contestMonitoring ? 'Giám sát kỳ thi · DevEdu' : 'Cuộc thi · DevEdu', content: contestMonitoring ? <ContestMonitoringPage contestId={contestId} /> : pathname.endsWith('/results') ? <ContestResultPage contestId={contestId} /> : pathname.endsWith('/virtual') ? <VirtualContestPage contestId={contestId} /> : <ContestDetailPage contestId={contestId} />, icon: IconTrophy }
     : profileRoute
-    ? { path: pathname, label: 'Contest Profile', title: 'Contest Profile · DevEdu', content: <ContestProfilePage handle={profileRoute[1]} view={profileRoute[2] as 'contests' | 'rating'} />, icon: IconTrophy }
+    ? { path: pathname, label: 'Hồ sơ thi đấu', title: 'Hồ sơ thi đấu · DevEdu', content: <ContestProfilePage handle={profileRoute[1]} />, icon: IconTrophy }
     : routes.find((candidate) => candidate.path === pathname)
 
   useEffect(() => {
@@ -96,7 +130,7 @@ export function App() {
         <div
           key={contestId ? `contest-${contestId}` : pathname}
           className={`page-enter mx-auto w-full ${
-            pathname === '/' || pathname === '/problems' || pathname.startsWith('/problems/') || pathname.startsWith('/contests/')
+            pathname === '/' || pathname === '/problems' || pathname.startsWith('/problems/') || pathname === '/leaderboard' || pathname === '/documents' || pathname.startsWith('/documents/') || pathname === '/contests' || pathname.startsWith('/contests/') || pathname.startsWith('/admin')
               ? 'lg:w-[90vw] lg:max-w-[90vw]'
               : 'max-w-[1180px]'
           }`}
@@ -119,6 +153,26 @@ function editProblemSlugFromPath(pathname: string): string | null {
   }
 }
 
+function documentSlugFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/documents\/([^/]+)$/)
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
+}
+
+function editDocumentSlugFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/documents\/([^/]+)\/edit$/)
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1])
+  } catch {
+    return null
+  }
+}
+
 function problemSlugFromPath(pathname: string): string | null {
   const prefix = '/problems/'
   if (!pathname.startsWith(prefix)) return null
@@ -133,7 +187,9 @@ function problemSlugFromPath(pathname: string): string | null {
 
 function SiteHeader({ pathname }: { pathname: string }) {
   const user = getStoredUser()
-  const visibleNavigationRoutes = user?.role === 'ADMIN' ? [...navigationRoutes, adminRoute] : navigationRoutes
+  const visibleNavigationRoutes = user?.role === 'ADMIN'
+    ? [...navigationRoutes, managementRoute, adminStatisticsRoute]
+    : user?.role === 'TEACHER' ? [...navigationRoutes, managementRoute] : navigationRoutes
 
   function logout() {
     clearAuthentication()
@@ -143,23 +199,26 @@ function SiteHeader({ pathname }: { pathname: string }) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 text-slate-700 backdrop-blur-md">
-      <div className="mx-auto flex h-13 w-full max-w-[1180px] items-center gap-7 px-4 sm:px-6 lg:px-8">
-        <a className="group flex shrink-0 items-center gap-2 font-bold tracking-tight" href="/" aria-label="DevEdu - Trình biên dịch">
-          <span className="relative grid h-8 w-8 place-items-center rounded-md border border-blue-200 bg-blue-50 font-mono text-sm font-black text-blue-600 transition duration-200 group-hover:-rotate-3 group-hover:border-blue-400 group-hover:bg-blue-100">
-            <IconCode className="h-[18px] w-[18px] text-blue-600" />
-          </span>
-          <span className="font-display text-[17px] font-semibold tracking-[-0.025em] text-slate-950">DevEdu</span>
+      <div className="grid h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 sm:px-5 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:px-8">
+        <a className="group flex min-w-0 items-center justify-self-start" href="/" aria-label="DevEdu - Trình biên dịch">
+          <img
+            src="/logo.svg"
+            alt=""
+            className="h-11 w-11 shrink-0 transition-transform duration-200 group-hover:-rotate-3 group-hover:scale-105"
+          />
         </a>
 
-        <nav className="hidden min-w-0 flex-1 items-stretch gap-1 lg:flex" aria-label="Điều hướng chính">
+        <nav className="hidden h-full min-w-0 items-stretch justify-self-center gap-1 lg:flex" aria-label="Điều hướng chính">
           {visibleNavigationRoutes.map((item) => {
-            const active = pathname === item.path || ((item.path === '/problems' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
+            const active = pathname === item.path
+              || ((item.path === '/problems' || item.path === '/documents' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
+              || (item.path === '/admin' && pathname.startsWith('/admin/'))
             return (
               <a
                 key={item.path}
                 href={item.path}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex min-h-13 items-center px-3 text-[13px] font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition-transform ${
+                className={`relative flex h-full items-center whitespace-nowrap px-3.5 text-[13px] font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:transition-transform ${
                   active
                     ? 'text-blue-600 after:scale-x-100 after:bg-blue-600'
                     : 'text-slate-600 after:scale-x-0 after:bg-blue-600 hover:text-slate-950'
@@ -171,7 +230,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex min-w-0 items-center justify-self-end gap-2">
           {user ? (
             <details className="group relative">
               <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 rounded-lg px-2 transition hover:bg-slate-100 [&::-webkit-details-marker]:hidden">
@@ -223,7 +282,7 @@ function SiteHeader({ pathname }: { pathname: string }) {
 
       <nav className="flex w-full justify-start gap-1 overflow-x-auto border-t border-slate-100 bg-white px-3 text-xs sm:justify-center lg:hidden" aria-label="Điều hướng chính trên thiết bị di động">
         {visibleNavigationRoutes.map((item) => {
-          const active = pathname === item.path || ((item.path === '/problems' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
+          const active = pathname === item.path || ((item.path === '/problems' || item.path === '/documents' || item.path === '/contests') && pathname.startsWith(`${item.path}/`))
           return (
             <a
               key={item.path}

@@ -3,6 +3,7 @@ import { createProgrammingProblem, updateProgrammingProblem } from '../api/progr
 import {
   topicLabels,
   type CreateProblemTestCase,
+  type CreateProgrammingProblem,
   type ProblemDifficulty,
   type ProblemTopic,
   type ProgrammingProblemDetail,
@@ -24,39 +25,43 @@ const emptyTestCase = (): CreateProblemTestCase => ({ input: '', expectedOutput:
 const minimumTestCases = () => [emptyTestCase(), emptyTestCase(), emptyTestCase()]
 const SQL_INPUT_DESCRIPTION = 'Không có dữ liệu đầu vào từ stdin. Các câu lệnh tạo bảng và dữ liệu mẫu sẽ được đặt sẵn trong code.'
 
-export function ProblemCreator({ onCreated, standalone = false, onCancel, initialProblem }: {
+export function ProblemCreator({ onCreated, standalone = false, onCancel, initialProblem, initialDraft, saveProblem, scopeLabel }: {
   onCreated: (problem: ProgrammingProblemDetail) => void
   standalone?: boolean
   onCancel?: () => void
   initialProblem?: ManagedProgrammingProblem
+  initialDraft?: CreateProgrammingProblem
+  saveProblem?: (problem: CreateProgrammingProblem) => Promise<ProgrammingProblemDetail>
+  scopeLabel?: string
 }) {
+  const initialValue = initialProblem ?? initialDraft
   const [open, setOpen] = useState(standalone)
-  const [title, setTitle] = useState(initialProblem?.title ?? '')
-  const [slug, setSlug] = useState(initialProblem?.slug ?? '')
-  const [slugEdited, setSlugEdited] = useState(Boolean(initialProblem))
-  const [summary, setSummary] = useState(initialProblem?.summary ?? '')
-  const [description, setDescription] = useState(initialProblem?.description ?? '')
-  const [inputDescription, setInputDescription] = useState(initialProblem?.inputDescription ?? '')
-  const [outputDescription, setOutputDescription] = useState(initialProblem?.outputDescription ?? '')
+  const [title, setTitle] = useState(initialValue?.title ?? '')
+  const [slug, setSlug] = useState(initialValue?.slug ?? '')
+  const [slugEdited, setSlugEdited] = useState(Boolean(initialValue))
+  const [summary, setSummary] = useState(initialValue?.summary ?? '')
+  const [description, setDescription] = useState(initialValue?.description ?? '')
+  const [inputDescription, setInputDescription] = useState(initialValue?.inputDescription ?? '')
+  const [outputDescription, setOutputDescription] = useState(initialValue?.outputDescription ?? '')
   const [sampleInput, setSampleInput] = useState(
-    initialProblem?.topic === 'SQL'
+    initialValue?.topic === 'SQL' && initialProblem
       ? (initialProblem.testCases[0]?.input ?? '')
-      : (initialProblem?.sampleInput ?? ''),
+      : (initialValue?.sampleInput ?? ''),
   )
-  const [sampleOutput, setSampleOutput] = useState(initialProblem?.sampleOutput ?? '')
-  const [topic, setTopic] = useState<ProblemTopic>(initialProblem?.topic ?? 'INTRODUCTION')
-  const [difficulty, setDifficulty] = useState<ProblemDifficulty>(initialProblem?.difficulty ?? 'EASY')
+  const [sampleOutput, setSampleOutput] = useState(initialValue?.sampleOutput ?? '')
+  const [topic, setTopic] = useState<ProblemTopic>(initialValue?.topic ?? 'INTRODUCTION')
+  const [difficulty, setDifficulty] = useState<ProblemDifficulty>(initialValue?.difficulty ?? 'EASY')
   const [allowedLanguages, setAllowedLanguages] = useState<SubmissionLanguage[]>(
-    initialProblem ? [...initialProblem.allowedLanguages] : ['CPP'],
+    initialValue ? [...initialValue.allowedLanguages] : ['CPP'],
   )
   const [starterCodes, setStarterCodes] = useState<Partial<Record<SubmissionLanguage, string>>>(() => ({
-    ...(initialProblem?.starterCodes ?? { CPP: createStarterCode('CPP', '') }),
+    ...(initialValue?.starterCodes ?? { CPP: createStarterCode('CPP', '') }),
   }))
   const [editedStarterLanguages, setEditedStarterLanguages] = useState<SubmissionLanguage[]>(
-    initialProblem ? [...initialProblem.allowedLanguages] : [],
+    initialValue ? [...initialValue.allowedLanguages] : [],
   )
   const [testCases, setTestCases] = useState<CreateProblemTestCase[]>(
-    initialProblem ? initialProblem.testCases.map((testCase) => ({ ...testCase })) : minimumTestCases(),
+    initialValue ? initialValue.testCases.map((testCase) => ({ ...testCase })) : minimumTestCases(),
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -119,9 +124,11 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
         starterCodes: Object.fromEntries(allowedLanguages.map((language) => [language, starterCodes[language] ?? ''])),
         testCases,
       }
-      const created = initialProblem
-        ? await updateProgrammingProblem(initialProblem.slug, request)
-        : await createProgrammingProblem(request)
+      const created = saveProblem
+        ? await saveProblem(request)
+        : initialProblem
+          ? await updateProgrammingProblem(initialProblem.slug, request)
+          : await createProgrammingProblem(request)
       if (!initialProblem) resetForm()
       if (!standalone) setOpen(false)
       onCreated(created)
@@ -168,6 +175,7 @@ export function ProblemCreator({ onCreated, standalone = false, onCancel, initia
         <form onSubmit={(event) => void submit(event)} className={`${standalone ? '' : 'mt-4'} ui-panel p-5 sm:p-7`}>
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold text-slate-950">{initialProblem ? 'Sửa bài tập lập trình' : 'Tạo bài tập lập trình'}</h1>
+            {scopeLabel ? <p className="mt-1 text-sm font-semibold text-blue-700">{scopeLabel}</p> : null}
             <p className="mt-1 text-sm text-slate-600">Test case bên dưới được giữ kín và chỉ dùng khi chấm bài.</p>
           </div>
 

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { UserRole } from '../../auth/types/auth'
-import { deleteManagedUser, getManagedUsers, updateManagedUser, updateManagedUserRole } from '../api/adminUsersApi'
-import type { ManagedUser } from '../types/adminUser'
+import { deleteManagedUser, getEmailVerificationSettings, getManagedUsers, updateEmailVerificationSettings, updateManagedUser, updateManagedUserRole } from '../api/adminUsersApi'
+import type { EmailVerificationSettings, ManagedUser } from '../types/adminUser'
 import { IconFilter, IconSearch } from '../../../shared/components/Icons'
 import { ModalDialog } from '../../../shared/components/ModalDialog'
+import { getLearningDocumentEditorPermissions, setLearningDocumentEditorPermission } from '../../documents/api/learningDocumentsApi'
+import type { LearningDocumentEditorPermission } from '../../documents/types/learningDocument'
 
 const roles: UserRole[] = ['STUDENT', 'TEACHER', 'ADMIN']
 const roleLabels: Record<UserRole, string> = {
@@ -30,6 +32,11 @@ export function AdminUsersPage() {
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL')
   const [notice, setNotice] = useState<Notice>({ message: '', tone: 'success' })
+  const [emailSettings, setEmailSettings] = useState<EmailVerificationSettings | null>(null)
+  const [emailSettingsLoading, setEmailSettingsLoading] = useState(true)
+  const [emailSettingsSaving, setEmailSettingsSaving] = useState(false)
+  const [documentEditors, setDocumentEditors] = useState<LearningDocumentEditorPermission[]>([])
+  const [documentPermissionSavingId, setDocumentPermissionSavingId] = useState<number | null>(null)
 
   useEffect(() => {
     if (currentUser?.role !== 'ADMIN') {
@@ -41,6 +48,13 @@ export function AdminUsersPage() {
       .then(setUsers)
       .catch((error: unknown) => setNotice({ message: messageOf(error, 'Không thể tải người dùng.'), tone: 'error' }))
       .finally(() => setLoading(false))
+    void getEmailVerificationSettings()
+      .then(setEmailSettings)
+      .catch((error: unknown) => setNotice({ message: messageOf(error, 'Không thể tải cài đặt xác nhận email.'), tone: 'error' }))
+      .finally(() => setEmailSettingsLoading(false))
+    void getLearningDocumentEditorPermissions()
+      .then(setDocumentEditors)
+      .catch((error: unknown) => setNotice({ message: messageOf(error, 'Không thể tải quyền chỉnh sửa tài liệu.'), tone: 'error' }))
   }, [currentUser?.role])
 
   useEffect(() => {
@@ -114,6 +128,43 @@ export function AdminUsersPage() {
     }
   }
 
+  async function toggleEmailVerification() {
+    if (!emailSettings || emailSettingsSaving) return
+    setEmailSettingsSaving(true)
+    try {
+      const updated = await updateEmailVerificationSettings(!emailSettings.enabled)
+      setEmailSettings(updated)
+      setNotice({
+        message: updated.enabled ? 'Đã bật gửi email xác nhận đăng ký.' : 'Đã tạm tắt gửi email xác nhận đăng ký.',
+        tone: 'success',
+      })
+    } catch (error) {
+      setNotice({ message: messageOf(error, 'Không thể cập nhật cài đặt xác nhận email.'), tone: 'error' })
+    } finally {
+      setEmailSettingsSaving(false)
+    }
+  }
+
+  async function toggleDocumentEditing(user: ManagedUser) {
+    if (user.role !== 'TEACHER' || documentPermissionSavingId !== null) return
+    const current = documentEditors.find(item => item.userId === user.id)?.enabled ?? false
+    setDocumentPermissionSavingId(user.id)
+    try {
+      const updated = await setLearningDocumentEditorPermission(user.id, !current)
+      setDocumentEditors(items => [...items.filter(item => item.userId !== updated.userId), updated])
+      setNotice({
+        message: updated.enabled
+          ? `Đã cấp quyền chỉnh sửa tài liệu cho ${updated.name}.`
+          : `Đã thu hồi quyền chỉnh sửa tài liệu của ${updated.name}.`,
+        tone: 'success',
+      })
+    } catch (error) {
+      setNotice({ message: messageOf(error, 'Không thể cập nhật quyền chỉnh sửa tài liệu.'), tone: 'error' })
+    } finally {
+      setDocumentPermissionSavingId(null)
+    }
+  }
+
   return (
     <section>
       <div className="ui-page-header">
@@ -126,6 +177,36 @@ export function AdminUsersPage() {
 
       {!loading && currentUser?.role === 'ADMIN' ? (
         <>
+          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-950">Email xác nhận đăng ký</h2>
+                {!emailSettingsLoading && emailSettings ? (
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${emailSettings.enabled ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {emailSettings.enabled ? 'Đang bật' : 'Đang tắt'}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                Khi tắt, hệ thống tạm dừng đăng ký bằng email; Google và GitHub vẫn hoạt động bình thường.
+              </p>
+              {emailSettings && !emailSettings.smtpConfigured ? (
+                <p className="mt-2 text-xs font-semibold text-red-600">SMTP chưa được cấu hình trong môi trường chạy backend.</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={emailSettings?.enabled ?? false}
+              aria-label="Bật hoặc tắt email xác nhận đăng ký"
+              disabled={emailSettingsLoading || emailSettingsSaving || !emailSettings}
+              onClick={() => void toggleEmailVerification()}
+              className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${emailSettings?.enabled ? 'bg-blue-600' : 'bg-slate-300'}`}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${emailSettings?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className="relative block w-full sm:max-w-md">
               <span className="sr-only">Tìm kiếm người dùng</span>
@@ -143,15 +224,17 @@ export function AdminUsersPage() {
           </div>
 
           <div className="ui-panel mt-4 overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-sm">
+            <table className="w-full min-w-[960px] text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
-                <tr><th className="px-6 py-4">Người dùng</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Ngày đăng ký</th><th className="px-6 py-4">Phân quyền</th><th className="px-6 py-4 text-right">Thao tác</th></tr>
+                <tr><th className="px-6 py-4">Người dùng</th><th className="px-6 py-4">Email</th><th className="px-6 py-4">Ngày đăng ký</th><th className="px-6 py-4">Phân quyền</th><th className="px-6 py-4">Sửa tài liệu</th><th className="px-6 py-4 text-right">Thao tác</th></tr>
               </thead>
               <tbody>
                 {visibleUsers.map((user) => {
                   const isCurrentAdmin = user.id === currentUser.id || user.email === currentUser.email
                   const isUpdating = updatingId === user.id
                   const isDeleting = deletingId === user.id
+                  const canEditDocuments = documentEditors.find(item => item.userId === user.id)?.enabled ?? false
+                  const isSavingDocumentPermission = documentPermissionSavingId === user.id
                   return <tr key={user.id} className="border-t border-slate-100 transition hover:bg-blue-50/45">
                     <td className="px-6 py-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-blue-600 font-mono text-sm font-bold text-white shadow-sm">{user.name.charAt(0).toLocaleUpperCase('vi')}</span><div className="flex items-center gap-2"><span className="font-bold text-slate-950">{user.name}</span>{isCurrentAdmin ? <span className="rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">Bạn</span> : null}</div></div></td>
                     <td className="px-6 py-4 font-mono text-xs text-slate-600">{user.email}</td>
@@ -159,6 +242,7 @@ export function AdminUsersPage() {
                     <td className="px-6 py-4"><div className="flex items-center gap-2"><select aria-label={`Role của ${user.name}`} value={user.role} disabled={isCurrentAdmin || isUpdating || isDeleting} onChange={(event) => void changeRole(user, event.target.value as UserRole)} className={`rounded-xl border px-3 py-1.5 font-mono text-xs font-bold outline-none transition disabled:cursor-not-allowed disabled:opacity-60 ${user.role === 'ADMIN' ? 'border-red-200 bg-red-50 text-red-700 focus:border-red-500' : user.role === 'TEACHER' ? 'border-blue-200 bg-blue-50 text-blue-800 focus:border-blue-500' : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500'}`}>
                         {roles.map((role) => <option key={role} value={role} className="bg-white text-slate-900">{roleLabels[role]}</option>)}
                       </select>{isUpdating || isDeleting ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-100 border-t-blue-600" aria-label="Đang xử lý" /> : null}</div></td>
+                    <td className="px-6 py-4">{user.role === 'TEACHER' ? <button type="button" role="switch" aria-checked={canEditDocuments} aria-label={`Quyền sửa tài liệu của ${user.name}`} disabled={isSavingDocumentPermission || documentPermissionSavingId !== null} onClick={() => void toggleDocumentEditing(user)} className={`relative h-7 w-12 cursor-pointer rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${canEditDocuments ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${canEditDocuments ? 'translate-x-6' : 'translate-x-1'}`} /></button> : <span className="text-xs text-slate-400">—</span>}</td>
                     <td className="px-6 py-4 text-right"><div className="flex justify-end gap-2">{user.role === 'TEACHER' || user.role === 'STUDENT' ? <><button type="button" disabled={isDeleting || isUpdating} onClick={() => beginEdit(user)} className="min-h-9 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-60">Sửa</button><button type="button" disabled={isDeleting || isUpdating} onClick={() => setDeleteTarget(user)} className="min-h-9 cursor-pointer rounded-lg border border-red-200 bg-white px-3 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60">Xóa</button></> : <span className="text-xs text-slate-400">—</span>}</div></td>
                   </tr>
                 })}

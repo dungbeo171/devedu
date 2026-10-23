@@ -66,7 +66,10 @@ export async function getProgrammingProblems(
   if (filters?.topic) query.set('topic', filters.topic)
   if (filters?.difficulty) query.set('difficulty', filters.difficulty)
   if (filters?.language) query.set('language', filters.language)
-  const response = await fetch(`/api/problems${query.size ? `?${query.toString()}` : ''}`)
+  const accessToken = storedAccessToken()
+  const response = await fetch(`/api/problems${query.size ? `?${query.toString()}` : ''}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  })
   if (!response.ok) {
     throw new Error('Không thể tải danh sách bài tập.')
   }
@@ -104,6 +107,30 @@ export async function createProgrammingProblem(
     throw new Error(body?.message ?? 'Không thể thêm bài tập.')
   }
   return response.json() as Promise<ProgrammingProblemDetail>
+}
+
+export async function generateProgrammingProblemDraft(
+  description: string,
+): Promise<CreateProgrammingProblem> {
+  const accessToken = storedAccessToken()
+  if (!accessToken) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+
+  const response = await fetch('/api/teacher/problems/ai-draft', {
+    method: 'POST',
+    signal: AbortSignal.timeout(60000),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ description }),
+  })
+  if (response.status === 401) throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+  if (response.status === 403) throw new Error('Chỉ giáo viên hoặc quản trị viên được tạo bài bằng AI.')
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { message?: string } | null
+    throw new Error(body?.message ?? 'Gemini không thể tạo bài tập lúc này. Vui lòng thử lại.')
+  }
+  return response.json() as Promise<CreateProgrammingProblem>
 }
 
 export async function getManagedProgrammingProblem(slug: string): Promise<ManagedProgrammingProblem> {

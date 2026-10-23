@@ -10,7 +10,7 @@ import {
   type SubmissionLanguage,
 } from '../types/programmingProblem'
 import { IconCheck, IconChevronDown, IconCode, IconFilter, IconSearch } from '../../../shared/components/Icons'
-import { problemListUrl, readProblemListState, type ProblemListState, type ProgressFilter } from '../problemListState'
+import { problemListUrl, problemPageWindow, readProblemListState, type ProblemListState, type ProgressFilter } from '../problemListState'
 
 const topics = Object.entries(topicLabels) as [ProblemTopic, string][]
 const difficultyLabels: Record<ProblemDifficulty, string> = {
@@ -34,12 +34,12 @@ export function ProgrammingProblems({ slug }: ProgrammingProblemsProps) {
   const [closeFilterAfterLoad, setCloseFilterAfterLoad] = useState(false)
   const [loadedFilterKey, setLoadedFilterKey] = useState('')
   const filterKey = JSON.stringify([selectedTopic, difficulty, language])
+  const currentUser = getStoredUser()
   const [problems, setProblems] = useState<ProgrammingProblemSummary[]>([])
   const [solvedProblemIds, setSolvedProblemIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [flashMessage, setFlashMessage] = useState('')
-  const currentUser = getStoredUser()
   const [progressLoading, setProgressLoading] = useState(Boolean(currentUser))
 
   function changeFilters(patch: Partial<ProblemListState>, closeWhenReady = true) {
@@ -366,6 +366,11 @@ function Pagination({ page, totalPages, onChange }: {
   totalPages: number
   onChange: (page: number) => void
 }) {
+  const pageNumbers = problemPageWindow(page, totalPages)
+  const showFirstPageShortcut = pageNumbers[0] > 1
+  const lastVisiblePage = pageNumbers[pageNumbers.length - 1]
+  const showLastPageShortcut = lastVisiblePage < totalPages
+
   return (
     <nav className="mt-6 flex flex-wrap items-center justify-center gap-2" aria-label="Phân trang bài tập">
       <button
@@ -376,17 +381,45 @@ function Pagination({ page, totalPages, onChange }: {
       >
         Trước
       </button>
-      {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+      {showFirstPageShortcut ? (
+        <>
+          <button
+            type="button"
+            aria-label="Đi tới trang đầu"
+            title="Trang đầu"
+            onClick={() => onChange(1)}
+            className="grid h-9 min-w-9 cursor-pointer place-items-center rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          >
+            1
+          </button>
+          {pageNumbers[0] > 2 ? <span className="px-0.5 text-sm text-slate-400" aria-hidden="true">…</span> : null}
+        </>
+      ) : null}
+      {pageNumbers.map((pageNumber) => (
         <button
           key={pageNumber}
           type="button"
           aria-current={pageNumber === page ? 'page' : undefined}
           onClick={() => onChange(pageNumber)}
-          className={`grid h-9 min-w-9 place-items-center rounded-md px-2 text-xs font-semibold transition ${pageNumber === page ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+          title={pageNumber === totalPages ? 'Trang cuối' : undefined}
+          className={`grid h-9 min-w-9 cursor-pointer place-items-center rounded-md px-2 text-xs font-semibold transition ${pageNumber === page ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
         >
           {pageNumber}
         </button>
       ))}
+      {showLastPageShortcut ? (
+        <>
+          <span className="px-0.5 text-sm text-slate-400" aria-hidden="true">…</span>
+          <button
+            type="button"
+            aria-label={`Đi tới trang cuối, trang ${totalPages}`}
+            onClick={() => onChange(totalPages)}
+            className="h-9 cursor-pointer rounded-md border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+          >
+            Trang cuối
+          </button>
+        </>
+      ) : null}
       <button
         type="button"
         disabled={page === totalPages}

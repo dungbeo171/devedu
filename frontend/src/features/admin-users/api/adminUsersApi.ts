@@ -1,5 +1,5 @@
 import type { UserRole } from '../../auth/types/auth'
-import type { ManagedUser } from '../types/adminUser'
+import type { EmailVerificationSettings, ManagedUser } from '../types/adminUser'
 
 function accessToken() {
   const token = localStorage.getItem('devedu.accessToken') ?? localStorage.getItem('accessToken')
@@ -45,4 +45,17 @@ export const updateManagedUser = (userId: number, body: { name: string; email: s
 export const deleteManagedUser = (userId: number) => request<void>(
   `/api/admin/users/${encodeURIComponent(userId)}`,
   { method: 'DELETE' },
+)
+
+export const getEmailVerificationSettings = () => request<EmailVerificationSettings>(
+  '/api/admin/settings/email-verification',
+)
+
+export const updateEmailVerificationSettings = (enabled: boolean) => request<EmailVerificationSettings>(
+  '/api/admin/settings/email-verification',
+  {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  },
 )

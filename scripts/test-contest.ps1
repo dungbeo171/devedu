@@ -48,7 +48,7 @@ try {
         '-v', '/var/run/docker.sock:/var/run/docker.sock', '-v', 'devedu_judge_workspaces:/judge-workspaces',
         '-e', "DB_URL=$dbUrl", '-e', "DB_USERNAME=$dbUser", '-e', "DB_PASSWORD=$($pgEnv['POSTGRES_PASSWORD'])",
         '-e', "JWT_SECRET=$jwt", '-e', 'ADMIN_EMAIL=contest-smoke@example.com', '-e', "ADMIN_PASSWORD=$password", '-e', 'ADMIN_NAME=Contest Smoke',
-        '-e', 'JUDGE_WORKSPACE_ROOT=/judge-workspaces', '-e', 'JUDGE_WORKSPACE_VOLUME=devedu_judge_workspaces', $backend.Image)
+        '-e', 'JUDGE_WORKSPACE_ROOT=/judge-workspaces', '-e', 'JUDGE_WORKSPACE_VOLUME=devedu_judge_workspaces', $backend.Config.Image)
     $binding = Docker-Checked @('port', $containerId, '8080')
     $script:baseUrl = 'http://' + $binding.Trim()
     $ready = $false
@@ -63,7 +63,7 @@ try {
     Test-Api 'PATCH' "/api/admin/users/$($teacher.user.id)/role" @{ role='TEACHER' } $admin.accessToken | Out-Null
     $teacher = Test-Api 'POST' '/api/auth/login' @{ email='contest-teacher@example.com'; password=$password }
     $problem = Test-Api 'GET' '/api/problems/tong-hai-so' $null
-    $body = @{ name='Contest integration smoke'; type='CUSTOM'; startsAt=[DateTime]::UtcNow.AddHours(1).ToString('o'); durationMinutes=1; rules='Test only'; problems=@(@{ problemId=$problem.id; points=100 }) }
+    $body = @{ name='Contest integration smoke'; type='CUSTOM'; startsAt=[DateTime]::UtcNow.AddHours(1).ToString('o'); durationMinutes=1; problems=@(@{ problemId=$problem.id; points=100 }) }
     Test-Api 'POST' '/api/teacher/contests' $body $student.accessToken 403 | Out-Null
     $created = Test-Api 'POST' '/api/teacher/contests' $body $teacher.accessToken 201
     $id = $created.id
@@ -77,9 +77,16 @@ int main() { long long a, b; std::cin >> a >> b; std::cout << a + b; }' }
     Test-Api 'POST' "$path/registration" $null $student.accessToken 204
     $detail = Test-Api 'GET' $path $null $student.accessToken
     Assert-True ($detail.contest.participants -eq 1 -and $detail.registered -and $detail.contest.status -eq 'UPCOMING') 'Registration is not idempotent'
+    Assert-True ($detail.PSObject.Properties.Name -notcontains 'rules' -and $detail.contest.PSObject.Properties.Name -notcontains 'rated') 'Removed fields still exposed'
     Test-Api 'POST' $submitPath $code $student.accessToken 409 | Out-Null
     Docker-Checked @('exec', $pgId, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', $dbUser, '-d', $dbName, '-c', "UPDATE $schema.contests SET starts_at=now()-interval '5 seconds', ends_at=now()+interval '55 seconds' WHERE id='$id'::uuid") | Out-Null
     Test-Api 'POST' $submitPath $code $teacher.accessToken 403 | Out-Null
+    Test-Api 'POST' $submitPath $code $student.accessToken 409 | Out-Null
+    $attempt = Test-Api 'POST' "$path/attempt" $null $student.accessToken
+    $again = Test-Api 'POST' "$path/attempt" $null $student.accessToken
+    Assert-True ($attempt.startsAt -eq $again.startsAt -and $attempt.endsAt -eq $again.endsAt) 'Personal clock reset on repeated start'
+    $refresh = Test-Api 'GET' $path $null $student.accessToken
+    Assert-True ($refresh.myAttempt.startsAt -eq $attempt.startsAt) 'Personal clock was lost on refresh'
     Test-Api 'POST' "$path/problems/$([Guid]::NewGuid())/submissions" $code $student.accessToken 404 | Out-Null
     Test-Api 'POST' $submitPath @{ language='HTML'; sourceCode='<p>invalid language</p>' } $student.accessToken 400 | Out-Null
     $wrong = Test-Api 'POST' $submitPath @{ language='CPP'; sourceCode='#include <iostream>
@@ -101,7 +108,49 @@ int main() { std::cout << -999999999; }' } $student.accessToken
     Test-Api 'POST' "$path/registration" $null $teacher.accessToken 409 | Out-Null
     $finished = Test-Api 'GET' '/api/contests?status=FINISHED' $null
     Assert-True ($finished.contests.Count -eq 1 -and $finished.contests[0].participants -eq 1) 'Finished catalog is incorrect'
-    Write-Output 'PASS: create, authorization, registration, time windows, real Judge, duplicate scoring, privacy, history, finished catalog.'
+    for ($i = 0; $i -lt 15; $i++) {
+        $result = Test-Api 'GET' "$path/results" $null $student.accessToken
+        if ($result.finalized) { break }
+        Start-Sleep -Seconds 1
+    }
+    Assert-True ($result.finalized -and $result.detail.myResult.score -eq 100 -and $result.PSObject.Properties.Name -notcontains 'rating') 'Finalization or result without rating failed'
+    $profile = Test-Api 'GET' "/api/profiles/user-$($student.user.publicId)/contests" $null $student.accessToken
+    Assert-True ($profile.history.Count -eq 1 -and $profile.history[0].score -eq 100 -and $profile.PSObject.Properties.Name -notcontains 'currentRating') 'Contest history without rating failed'
+    $virtual = Test-Api 'POST' "$path/virtual" $null $student.accessToken
+    Assert-True ($virtual.detail.contest.status -eq 'ONGOING' -and $virtual.detail.myResult.score -eq 0) 'Virtual contest no longer works'
+    $pastBody = @{ name='Past opening'; description='Description persists'; monitoringEnabled=$true; type='CUSTOM'; startsAt=[DateTime]::UtcNow.AddHours(-1).ToString('o'); endsAt=[DateTime]::UtcNow.AddHours(2).ToString('o'); durationMinutes=1; problems=@(@{ problemId=$problem.id; points=100 }) }
+    $past = Test-Api 'POST' '/api/teacher/contests' $pastBody $teacher.accessToken 201
+    $pastPath = "/api/contests/$($past.id)"
+    Test-Api 'POST' "$pastPath/registration" $null $student.accessToken 204 | Out-Null
+    $personal = Test-Api 'POST' "$pastPath/attempt" $null $student.accessToken
+    Assert-True (([datetime]$personal.endsAt - [datetime]$personal.startsAt).TotalSeconds -eq 60) 'Personal duration ignored'
+    $pastDetail = Test-Api 'GET' $pastPath $null $student.accessToken
+    Assert-True ($pastDetail.contest.description -eq 'Description persists' -and $pastDetail.contest.monitoringEnabled -and $pastDetail.contest.status -eq 'ONGOING') 'New fields did not persist'
+    $cameraMine = Test-Api 'GET' "$pastPath/camera/me" $null $student.accessToken
+    Assert-True ($cameraMine.canMonitor -and -not $cameraMine.canReview -and $cameraMine.PSObject.Properties.Name -notcontains 'summary') 'Student camera endpoint exposed statistics or incorrect capabilities'
+    $observation = @{ eventId=[Guid]::NewGuid().ToString(); kind='LOOKING_AWAY' }
+    Test-Api 'POST' "$pastPath/camera/events" $observation $student.accessToken 204 | Out-Null
+    Test-Api 'POST' "$pastPath/camera/events" $observation $student.accessToken 204 | Out-Null
+    $reportPath = "/api/teacher/contests/$($past.id)/camera"
+    Test-Api 'GET' $reportPath $null $student.accessToken 403 | Out-Null
+    $teacherReport = Test-Api 'GET' $reportPath $null $teacher.accessToken
+    $adminReport = Test-Api 'GET' $reportPath $null $admin.accessToken
+    Assert-True ($teacherReport.participants[0].lookingAwayCount -eq 1 -and $adminReport.participants[0].lookingAwayCount -eq 1) 'Authorized camera report or deduplication failed'
+    $otherTeacher = Test-Api 'POST' '/api/auth/register' @{ name='Other Teacher'; email='other-teacher@example.com'; password=$password } '' 201
+    Test-Api 'PATCH' "/api/admin/users/$($otherTeacher.user.id)/role" @{ role='TEACHER' } $admin.accessToken | Out-Null
+    $otherTeacher = Test-Api 'POST' '/api/auth/login' @{ email='other-teacher@example.com'; password=$password }
+    Test-Api 'GET' $reportPath $null $otherTeacher.accessToken 403 | Out-Null
+    Docker-Checked @('exec', $pgId, 'psql', '-v', 'ON_ERROR_STOP=1', '-U', $dbUser, '-d', $dbName, '-c', "UPDATE $schema.contest_registrations SET attempt_started_at=now()-interval '61 seconds' WHERE contest_id='$($past.id)'::uuid") | Out-Null
+    Test-Api 'POST' "$pastPath/problems/$($problem.id)/submissions" $code $student.accessToken 409 | Out-Null
+    Test-Api 'POST' "$pastPath/camera/events" @{ eventId=[Guid]::NewGuid().ToString(); kind='LOOKING_AWAY' } $student.accessToken 409 | Out-Null
+    $endedCamera = Test-Api 'GET' "$pastPath/camera/me" $null $student.accessToken
+    Assert-True (-not $endedCamera.canMonitor) 'Camera remained allowed after personal deadline'
+    $expired = Test-Api 'POST' "$pastPath/attempt" $null $student.accessToken
+    Assert-True ([datetimeoffset]$expired.endsAt -lt [datetimeoffset]::UtcNow) 'Expired attempt was restarted'
+    Write-Output 'PASS: create, personal deadline, real Judge, camera privacy, supervisor authorization, event deduplication and camera expiry.'
+} catch {
+    if ($containerId -and $containerId -match '^[a-f0-9]{64}$') { & docker logs --tail 250 $containerId 2>&1 | Select-String -Pattern 'ERROR|Caused by:|Exception:|com.devedu.learningplatform.application|com.devedu.learningplatform.infrastructure.persistence' -Context 0,3 }
+    throw
 } finally {
     $client.Dispose()
     if ($containerId -and $containerId -match '^[a-f0-9]{64}$') { & docker rm -f $containerId | Out-Null }

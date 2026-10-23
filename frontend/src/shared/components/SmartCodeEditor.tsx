@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { requestCodeSuggestion } from '../api/codeSuggestionApi'
 
 export type EditorLanguage = 'CPP' | 'JAVA' | 'PYTHON' | 'HTML' | 'MYSQL' | 'CSS' | 'JAVASCRIPT'
 
@@ -7,6 +8,7 @@ interface SmartCodeEditorProps {
   language: EditorLanguage
   value: string
   onChange: (value: string) => void
+  aiContext?: string
 }
 
 interface Completion {
@@ -21,6 +23,12 @@ interface HistoryEntry {
   value: string
   start: number
   end: number
+}
+
+interface AiSuggestion {
+  text: string
+  source: string
+  cursor: number
 }
 
 const indent = '    '
@@ -110,14 +118,18 @@ const completions: Record<EditorLanguage, Completion[]> = {
   ],
 }
 
-export function SmartCodeEditor({ editorId = 'code-editor', language, value, onChange }: SmartCodeEditorProps) {
+export function SmartCodeEditor({ editorId = 'code-editor', language, value, onChange, aiContext = '' }: SmartCodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const historyRef = useRef<HistoryEntry[]>([{ value, start: 0, end: 0 }])
   const historyIndexRef = useRef(0)
+  const aiRequestRef = useRef<AbortController | null>(null)
   const [selection, setSelection] = useState({ start: 0, end: 0 })
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const [selectedSuggestion, setSelectedSuggestion] = useState(0)
   const [scroll, setScroll] = useState({ top: 0, left: 0 })
+  const [aiPending, setAiPending] = useState(false)
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const token = useMemo(() => tokenAt(value, selection.start), [value, selection.start])
   const availableCompletions = useMemo(
@@ -152,6 +164,10 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
   }
 
   function applyValue(nextValue: string, cursorStart: number, cursorEnd = cursorStart, recordHistory = true) {
+    aiRequestRef.current?.abort()
+    setAiPending(false)
+    setAiSuggestion(null)
+    setAiError(null)
     if (recordHistory) {
       const currentEntry = historyRef.current[historyIndexRef.current]
       if (currentEntry?.value !== nextValue) {
@@ -188,6 +204,55 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
     applyValue(nextValue, cursor)
   }
 
+  function acceptAiSuggestion() {
+    if (!aiSuggestion || aiSuggestion.source !== value || aiSuggestion.cursor !== selection.start) return
+    const nextValue = value.slice(0, selection.start) + aiSuggestion.text + value.slice(selection.end)
+    applyValue(nextValue, selection.start + aiSuggestion.text.length)
+  }
+
+  async function generateAiSuggestion() {
+    const editor = textareaRef.current
+    const cursorStart = editor?.selectionStart ?? selection.start
+    const cursorEnd = editor?.selectionEnd ?? selection.end
+    setSuggestionsOpen(false)
+    setAiSuggestion(null)
+    setAiError(null)
+    if (!value.trim()) {
+      setAiError('Hãy viết một phần code trước khi yêu cầu gợi ý.')
+      return
+    }
+    if (cursorStart !== cursorEnd) {
+      setAiError('Bỏ chọn đoạn code và đặt con trỏ tại vị trí cần gợi ý.')
+      return
+    }
+
+    aiRequestRef.current?.abort()
+    const controller = new AbortController()
+    aiRequestRef.current = controller
+    const snapshot = { source: value, cursor: cursorStart, language }
+    setSelection({ start: cursorStart, end: cursorEnd })
+    setAiPending(true)
+    try {
+      const text = await requestCodeSuggestion(language, value, cursorStart, aiContext, controller.signal)
+      if (controller.signal.aborted) return
+      if (!text) {
+        setAiError('AI chưa tìm thấy gợi ý phù hợp tại vị trí này.')
+        return
+      }
+      setAiSuggestion({ text, source: snapshot.source, cursor: snapshot.cursor })
+      requestAnimationFrame(() => {
+        editor?.focus()
+        editor?.setSelectionRange(cursorStart, cursorEnd)
+      })
+    } catch (reason) {
+      if (!controller.signal.aborted) {
+        setAiError(reason instanceof Error ? reason.message : 'AI chưa thể tạo gợi ý lúc này.')
+      }
+    } finally {
+      if (!controller.signal.aborted) setAiPending(false)
+    }
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     const shortcutKey = event.ctrlKey || event.metaKey
     if (shortcutKey && event.key.toLowerCase() === 'z') {
@@ -221,6 +286,19 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
       if (event.key === 'Escape') {
         event.preventDefault()
         setSuggestionsOpen(false)
+        return
+      }
+    }
+
+    if (aiSuggestion && aiSuggestion.source === value && aiSuggestion.cursor === selection.start) {
+      if (event.key === 'Tab' && !event.shiftKey) {
+        event.preventDefault()
+        acceptAiSuggestion()
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setAiSuggestion(null)
         return
       }
     }
@@ -385,7 +463,9 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
           }}
           onKeyDown={handleKeyDown}
           onClick={updateSelection}
-          onBlur={() => setSuggestionsOpen(false)}
+          onBlur={() => {
+            setSuggestionsOpen(false)
+          }}
           onKeyUp={(event) => {
             if (!['ArrowDown', 'ArrowUp'].includes(event.key) || suggestions.length === 0) updateSelection()
           }}
@@ -399,6 +479,31 @@ export function SmartCodeEditor({ editorId = 'code-editor', language, value, onC
           aria-controls={suggestionsId}
           className="code-editor-text absolute inset-0 z-10 block h-full min-h-[500px] w-full resize-none bg-transparent p-4 text-transparent caret-blue-300 outline-none selection:bg-blue-600/30"
         />
+        {aiSuggestion && aiSuggestion.source === value && aiSuggestion.cursor === selection.start ? (
+          <div
+            aria-hidden="true"
+            className="code-editor-text pointer-events-none absolute z-[5] max-w-[calc(100%-1rem)] overflow-hidden whitespace-pre text-slate-500"
+            style={{ top: suggestionPosition.top - 24, left: suggestionPosition.left }}
+          >
+            {aiSuggestion.text}
+            <span className="ml-2 rounded border border-blue-700/70 bg-blue-950/90 px-1.5 py-0.5 font-sans text-[9px] font-semibold text-blue-300">AI · Tab</span>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void generateAiSuggestion()}
+          disabled={aiPending}
+          className="absolute bottom-3 right-3 z-20 inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-blue-700 bg-blue-900/95 px-3 py-1.5 text-[11px] font-semibold text-blue-100 shadow-lg transition hover:border-blue-500 hover:bg-blue-800 disabled:cursor-wait disabled:opacity-70"
+        >
+          <span className={`h-1.5 w-1.5 rounded-full bg-blue-300 ${aiPending ? 'animate-pulse' : ''}`} />
+          {aiPending ? 'AI đang gợi ý...' : 'AI gợi ý'}
+        </button>
+        {aiError ? (
+          <span role="status" className="pointer-events-none absolute bottom-12 right-3 z-20 max-w-72 rounded-lg border border-rose-800 bg-rose-950/95 px-3 py-2 text-[10px] font-medium text-rose-200 shadow-lg">
+            {aiError}
+          </span>
+        ) : null}
         {suggestions.length > 0 && suggestionPosition.top >= 0 ? (
           <div id={suggestionsId} role="listbox" style={{ top: suggestionPosition.top, left: suggestionPosition.left }} className="absolute z-30 w-72 max-w-[calc(100%-1rem)] overflow-hidden rounded-xl border border-blue-200 bg-white shadow-xl shadow-blue-900/20">
             {suggestions.map((completion, index) => (

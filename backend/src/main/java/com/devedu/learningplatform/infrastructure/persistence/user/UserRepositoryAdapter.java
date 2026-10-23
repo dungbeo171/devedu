@@ -82,6 +82,13 @@ public class UserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public List<User> searchByRole(com.devedu.learningplatform.domain.model.UserRole role, String query, int limit) {
+        return repository.searchByRole(role, query == null ? "" : query.trim(),
+                        PageRequest.of(0, Math.max(1, Math.min(limit, 50))))
+                .stream().map(this::toDomain).toList();
+    }
+
+    @Override
     @Transactional
     public User save(User user) {
         var publicId = user.publicId();

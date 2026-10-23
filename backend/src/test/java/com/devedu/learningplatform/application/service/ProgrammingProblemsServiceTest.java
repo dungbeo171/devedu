@@ -22,6 +22,7 @@ import com.devedu.learningplatform.domain.model.ProblemDifficulty;
 import com.devedu.learningplatform.domain.model.ProgrammingProblem;
 import com.devedu.learningplatform.domain.model.ProblemRunStatistics;
 import com.devedu.learningplatform.domain.model.SubmissionStatus;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationPreferencePort;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -36,6 +37,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class ProgrammingProblemsServiceTest {
 
@@ -78,6 +81,29 @@ class ProgrammingProblemsServiceTest {
         assertThat(runStatisticsRepository.statistics.successfulRuns()).isEqualTo(1);
         assertThat(service.list(null, null, null)).singleElement()
                 .satisfies(item -> assertThat(item.acceptanceRate()).isEqualTo(100.0));
+    }
+
+    @Test
+    void recordsProblemMetadataWhenAnAuthenticatedUserRunsTests() {
+        var preferences = mock(ProblemRecommendationPreferencePort.class);
+        var trackedService = new ProgrammingProblemsService(
+                problemRepository,
+                submissionRepository,
+                draftRepository,
+                problemId -> List.of(new ProblemTestCase(UUID.randomUUID(), problemId, "input", "output", 1000, 1)),
+                runStatisticsRepository,
+                command -> new JudgeResult(SubmissionStatus.ACCEPTED, "ok", 1, 1, 10, List.of()),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                preferences
+        );
+
+        trackedService.runTests(new RunProblemTestsCommand(
+                "binary-search", CodeLanguage.JAVA, "class Main {}", STUDENT_ID
+        ));
+
+        verify(preferences).recordProblemRun(
+                STUDENT_ID, ProblemTopic.ALGORITHMS, ProblemDifficulty.MEDIUM, CodeLanguage.JAVA
+        );
     }
 
     @Test

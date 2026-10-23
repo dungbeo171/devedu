@@ -12,7 +12,7 @@ class ContestScoringTest {
     private final UUID user = UUID.randomUUID(), first = UUID.randomUUID(), second = UUID.randomUUID();
     private final Instant start = Instant.parse("2026-10-01T00:00:00Z");
     private final ContestScoring scoring = new ContestScoring();
-    private final Contest contest = new Contest(UUID.randomUUID(), "Test", Contest.Type.CUSTOM, start, 60, user, "",
+    private final Contest contest = new Contest(UUID.randomUUID(), "Test", Contest.Type.CUSTOM, start, 60, user,
             List.of(new Contest.Problem(first, 100), new Contest.Problem(second, 200)));
     private ContestRepository.Entry entry(UUID who, UUID problem, SubmissionStatus status, int seconds) {
         return new ContestRepository.Entry(UUID.randomUUID(), who, problem, CodeLanguage.CPP, status, 0, 3, 10, start.plusSeconds(seconds));
@@ -43,5 +43,14 @@ class ContestScoringTest {
         assertThat(rows.get(1).rank()).isEqualTo(2);
         assertThat(rows.get(0).problems().get(0).attempts()).isZero();
         assertThat(rows.get(0).problems().get(0).score()).isZero();
+    }
+    @Test void ranksByElapsedPersonalTimeNotTimeSinceGlobalOpening() {
+        var other = UUID.randomUUID();
+        var rows = scoring.rank(contest, List.of(new ContestRepository.Participant(user, 1, "Early", start),
+                new ContestRepository.Participant(other, 2, "Late", start.plusSeconds(200))), List.of(
+                entry(user, first, SubmissionStatus.ACCEPTED, 100), entry(other, first, SubmissionStatus.ACCEPTED, 250)));
+        assertThat(rows.get(0).userId()).isEqualTo(2);
+        assertThat(rows.get(0).timeSeconds()).isEqualTo(50);
+        assertThat(rows.get(1).timeSeconds()).isEqualTo(100);
     }
 }

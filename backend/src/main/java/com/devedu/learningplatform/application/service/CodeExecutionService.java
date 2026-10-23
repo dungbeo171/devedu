@@ -5,6 +5,7 @@ import com.devedu.learningplatform.application.port.in.command.ExecuteCodeComman
 import com.devedu.learningplatform.application.port.in.result.CodeExecutionResult;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationPreferencePort;
 
 import java.util.HashSet;
 import java.util.Locale;
@@ -15,9 +16,18 @@ public final class CodeExecutionService implements ExecuteCodeUseCase {
     private static final int MAXIMUM_CODE_LENGTH = 100_000;
     private static final int MAXIMUM_INPUT_LENGTH = 100_000;
     private final CodeExecutionPort sandbox;
+    private final ProblemRecommendationPreferencePort recommendationPreferences;
 
     public CodeExecutionService(CodeExecutionPort sandbox) {
+        this(sandbox, ProblemRecommendationPreferencePort.noop());
+    }
+
+    public CodeExecutionService(
+            CodeExecutionPort sandbox,
+            ProblemRecommendationPreferencePort recommendationPreferences
+    ) {
         this.sandbox = Objects.requireNonNull(sandbox, "Sandbox is required");
+        this.recommendationPreferences = Objects.requireNonNull(recommendationPreferences);
     }
 
     @Override
@@ -59,11 +69,16 @@ public final class CodeExecutionService implements ExecuteCodeUseCase {
             throw new IllegalArgumentException("Total source code must not exceed 100000 characters");
         }
 
-        return sandbox.executeCode(new ExecuteCodeCommand(
+        var result = sandbox.executeCode(new ExecuteCodeCommand(
                 command.language(),
                 command.code(),
                 command.input() == null ? "" : command.input(),
-                Map.copyOf(files)
+                Map.copyOf(files),
+                command.userId()
         ));
+        if (command.userId() != null) {
+            recommendationPreferences.recordCompilerRun(command.userId(), command.language());
+        }
+        return result;
     }
 }

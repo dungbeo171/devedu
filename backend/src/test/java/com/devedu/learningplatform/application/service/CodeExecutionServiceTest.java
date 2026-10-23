@@ -4,9 +4,11 @@ import com.devedu.learningplatform.application.port.in.command.ExecuteCodeComman
 import com.devedu.learningplatform.application.port.in.result.CodeExecutionResult;
 import com.devedu.learningplatform.application.port.out.CodeExecutionPort;
 import com.devedu.learningplatform.domain.model.CodeLanguage;
+import com.devedu.learningplatform.application.problemrecommendation.ProblemRecommendationPreferencePort;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +44,22 @@ class CodeExecutionServiceTest {
                 "print('Hello')",
                 ""
         ));
+    }
+
+    @Test
+    void recordsOnlyTheCompilerLanguageForAuthenticatedUsers() {
+        var preferences = mock(ProblemRecommendationPreferencePort.class);
+        var trackedService = new CodeExecutionService(sandbox, preferences);
+        var userId = UUID.randomUUID();
+        when(sandbox.executeCode(any())).thenReturn(new CodeExecutionResult(
+                CodeLanguage.JAVA, CodeExecutionResult.Status.SUCCESS, "ok"
+        ));
+
+        trackedService.execute(new ExecuteCodeCommand(
+                CodeLanguage.JAVA, "class Main {}", "", Map.of(), userId
+        ));
+
+        verify(preferences).recordCompilerRun(userId, CodeLanguage.JAVA);
     }
 
     @Test

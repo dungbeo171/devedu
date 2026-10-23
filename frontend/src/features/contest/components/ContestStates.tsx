@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 export function ContestLoading() {
-  return <div role="status" aria-label="Đang tải Contest" className="mt-6 space-y-3">
+  return <div role="status" aria-label="Đang tải cuộc thi" className="mt-6 space-y-3">
     {[0, 1, 2].map(i => <div key={i} className="ui-skeleton h-36 rounded-lg" />)}
-    <span className="sr-only">Đang tải Contest…</span>
+    <span className="sr-only">Đang tải cuộc thi…</span>
   </div>
 }
 export function ContestError({ message, onRetry }: { message: string; onRetry: () => void }) {

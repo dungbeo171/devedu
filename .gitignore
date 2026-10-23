@@ -6,6 +6,7 @@
 Thumbs.db
 
 # Environment files
+.backups/
 .env
 .env.*
 !.env.example
@@ -16,4 +17,3 @@ backend/target/
 # Frontend
 frontend/node_modules/
 frontend/dist/
-

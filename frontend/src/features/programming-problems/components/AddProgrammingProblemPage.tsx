@@ -4,11 +4,17 @@ import { setPendingFlash } from '../../../shared/flashMessage'
 import { IconArrowLeft } from '../../../shared/components/Icons'
 import { ProblemCreator } from './ProblemCreator'
 import { ProblemJsonImporter } from './ProblemJsonImporter'
+import { AiProblemGenerator } from './AiProblemGenerator'
 
 export function AddProgrammingProblemPage() {
   const user = getStoredUser()
   const canCreate = user?.role === 'TEACHER' || user?.role === 'ADMIN'
-  const [mode, setMode] = useState<'manual' | 'json'>('manual')
+  const [mode, setMode] = useState<'manual' | 'ai' | 'json'>('manual')
+
+  function handleCreated(problem: { title: string }) {
+    setPendingFlash(`Đã thêm bài tập “${problem.title}”`)
+    window.location.assign('/problems')
+  }
 
   if (!canCreate) {
     return (
@@ -43,6 +49,15 @@ export function AddProgrammingProblemPage() {
         <button
           type="button"
           role="tab"
+          aria-selected={mode === 'ai'}
+          onClick={() => setMode('ai')}
+          className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold transition sm:flex-none ${mode === 'ai' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          Tạo bằng AI
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={mode === 'json'}
           onClick={() => setMode('json')}
           className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold transition sm:flex-none ${mode === 'json' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
@@ -55,11 +70,10 @@ export function AddProgrammingProblemPage() {
           <ProblemCreator
             standalone
             onCancel={() => window.location.assign('/problems')}
-            onCreated={(problem) => {
-              setPendingFlash(`Đã thêm bài tập “${problem.title}”`)
-              window.location.assign('/problems')
-            }}
+            onCreated={handleCreated}
           />
+        ) : mode === 'ai' ? (
+          <AiProblemGenerator onCreated={handleCreated} />
         ) : (
           <ProblemJsonImporter
             onImported={(count) => {
